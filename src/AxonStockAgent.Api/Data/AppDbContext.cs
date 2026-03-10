@@ -16,6 +16,8 @@ public class AppDbContext : DbContext
     public DbSet<DataProviderEntity> DataProviders => Set<DataProviderEntity>();
     public DbSet<NewsArticleEntity> NewsArticles { get; set; } = null!;
     public DbSet<SectorSentimentEntity> SectorSentiment { get; set; } = null!;
+    public DbSet<CompanyFundamentalsEntity> CompanyFundamentals => Set<CompanyFundamentalsEntity>();
+    public DbSet<InsiderTransactionEntity> InsiderTransactions => Set<InsiderTransactionEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -95,6 +97,25 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<SectorSentimentEntity>(e => {
             e.ToTable("sector_sentiment");
             e.HasIndex(x => new { x.Sector, x.CalculatedAt });
+        });
+
+        modelBuilder.Entity<CompanyFundamentalsEntity>(e =>
+        {
+            e.ToTable("company_fundamentals");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.Symbol).IsUnique();
+            e.Property(x => x.FetchedAt).HasDefaultValueSql("NOW()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
+        });
+
+        modelBuilder.Entity<InsiderTransactionEntity>(e =>
+        {
+            e.ToTable("insider_transactions");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.Symbol);
+            e.HasIndex(x => x.TransactionDate);
+            e.HasIndex(x => new { x.Symbol, x.Name, x.TransactionDate }).IsUnique();
+            e.Property(x => x.FetchedAt).HasDefaultValueSql("NOW()");
         });
     }
 }

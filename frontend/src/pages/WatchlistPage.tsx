@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useWatchlist, useAddToWatchlist, useRemoveFromWatchlist } from '../hooks/useApi';
 import { Plus, X } from 'lucide-react';
 import type { WatchlistItem } from '../types';
@@ -112,7 +113,7 @@ export default function WatchlistPage() {
                   )}
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-mono font-bold text-white">{item.symbol}</span>
+                      <Link to={`/stock/${item.symbol}`} className="font-mono font-bold text-axon-400 hover:text-axon-300 cursor-pointer">{item.symbol}</Link>
                       {item.country && (
                         <span className="text-base leading-none">
                           {countryFlag(item.country)}

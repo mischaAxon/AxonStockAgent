@@ -222,3 +222,58 @@ CREATE TABLE IF NOT EXISTS sector_sentiment (
     calculated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_sector_sentiment_sector_calc ON sector_sentiment(sector, calculated_at);
+
+-- Company fundamentals (gecacht, 1 rij per symbool)
+CREATE TABLE IF NOT EXISTS company_fundamentals (
+    id                    SERIAL PRIMARY KEY,
+    symbol                VARCHAR(20) NOT NULL UNIQUE,
+    pe_ratio              DOUBLE PRECISION,
+    forward_pe            DOUBLE PRECISION,
+    pb_ratio              DOUBLE PRECISION,
+    ps_ratio              DOUBLE PRECISION,
+    ev_to_ebitda          DOUBLE PRECISION,
+    profit_margin         DOUBLE PRECISION,
+    operating_margin      DOUBLE PRECISION,
+    return_on_equity      DOUBLE PRECISION,
+    return_on_assets      DOUBLE PRECISION,
+    revenue_growth_yoy    DOUBLE PRECISION,
+    earnings_growth_yoy   DOUBLE PRECISION,
+    debt_to_equity        DOUBLE PRECISION,
+    current_ratio         DOUBLE PRECISION,
+    quick_ratio           DOUBLE PRECISION,
+    dividend_yield        DOUBLE PRECISION,
+    payout_ratio          DOUBLE PRECISION,
+    market_cap            DOUBLE PRECISION,
+    revenue               DOUBLE PRECISION,
+    net_income            DOUBLE PRECISION,
+    shares_outstanding    BIGINT,
+    analyst_buy           INTEGER,
+    analyst_hold          INTEGER,
+    analyst_sell          INTEGER,
+    analyst_strong_buy    INTEGER,
+    analyst_strong_sell   INTEGER,
+    target_price_high     DOUBLE PRECISION,
+    target_price_low      DOUBLE PRECISION,
+    target_price_mean     DOUBLE PRECISION,
+    target_price_median   DOUBLE PRECISION,
+    fetched_at            TIMESTAMPTZ DEFAULT NOW(),
+    updated_at            TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Insider transactions
+CREATE TABLE IF NOT EXISTS insider_transactions (
+    id                SERIAL PRIMARY KEY,
+    symbol            VARCHAR(20) NOT NULL,
+    name              VARCHAR(200) NOT NULL,
+    relation          VARCHAR(100),
+    transaction_type  VARCHAR(20) NOT NULL,
+    transaction_date  DATE NOT NULL,
+    shares            BIGINT NOT NULL,
+    price_per_share   DOUBLE PRECISION,
+    total_value       DOUBLE PRECISION,
+    fetched_at        TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(symbol, name, transaction_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_insider_symbol ON insider_transactions(symbol);
+CREATE INDEX IF NOT EXISTS idx_insider_date   ON insider_transactions(transaction_date DESC);

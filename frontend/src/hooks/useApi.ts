@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
-import type { ApiResponse, PaginatedResponse, DashboardData, Signal, WatchlistItem, PortfolioItem, NewsArticle, SectorSentiment, TrendingSymbol } from '../types';
+import type { ApiResponse, PaginatedResponse, DashboardData, Signal, WatchlistItem, PortfolioItem, NewsArticle, SectorSentiment, TrendingSymbol, CompanyFundamentals, InsiderTransaction } from '../types';
 
 // Dashboard
 export function useDashboard() {
@@ -163,5 +163,32 @@ export function useTestProvider() {
     mutationFn: (name: string) =>
       api.post(`/v1/admin/providers/${name}/test`, {}),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'providers'] }),
+  });
+}
+
+// Fundamentals
+export function useFundamentals(symbol: string) {
+  return useQuery({
+    queryKey: ['fundamentals', symbol],
+    queryFn: () => api.get<ApiResponse<CompanyFundamentals>>(`/v1/fundamentals/${symbol}`),
+    enabled: !!symbol,
+    staleTime: 60 * 60 * 1000, // 1 uur client-side cache
+  });
+}
+
+export function useInsiderTransactions(symbol: string) {
+  return useQuery({
+    queryKey: ['insiders', symbol],
+    queryFn: () => api.get<ApiResponse<InsiderTransaction[]>>(`/v1/fundamentals/${symbol}/insiders`),
+    enabled: !!symbol,
+    staleTime: 60 * 60 * 1000,
+  });
+}
+
+export function useRefreshAllFundamentals() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post('/v1/fundamentals/refresh-all', {}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['fundamentals'] }),
   });
 }
