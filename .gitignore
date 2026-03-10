@@ -1,0 +1,33 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.userprefs
+*.sln.docstates
+
+## Build output
+publish/
+
+## ML model
+swingmodel.zip
+
+## Secrets
+appsettings.Development.json
+appsettings.Production.json
+.env
+.env.*
+
+## IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Docker
+.docker/
