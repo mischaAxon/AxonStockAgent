@@ -1,4 +1,5 @@
 using AxonStockAgent.Api.Data;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,6 +8,7 @@ namespace AxonStockAgent.Api.Controllers;
 /// <summary>
 /// Aggregated dashboard data for the frontend
 /// </summary>
+[Authorize]
 [ApiController]
 [Route("api/v1/[controller]")]
 public class DashboardController : ControllerBase
