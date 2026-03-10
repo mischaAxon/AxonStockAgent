@@ -228,4 +228,134 @@ public class FinnhubProvider : IMarketDataProvider, INewsProvider, IFundamentals
             return null;
         }
     }
+
+    // Deel 2: nieuwe methodes
+
+    public async Task<FinancialMetrics?> GetFinancialMetrics(string symbol)
+    {
+        await RateLimit();
+        var url = $"{BaseUrl}/stock/metric?symbol={symbol}&metric=all&token={_apiKey}";
+        try
+        {
+            var json = await _http.GetStringAsync(url);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            if (!root.TryGetProperty("metric", out var m)) return null;
+
+            return new FinancialMetrics(
+                Symbol:            symbol,
+                PeRatio:           GetNullableDouble(m, "peBasicExclExtraTTM"),
+                ForwardPe:         GetNullableDouble(m, "peExclExtraAnnual"),
+                PbRatio:           GetNullableDouble(m, "pbQuarterly"),
+                PsRatio:           GetNullableDouble(m, "psTTM"),
+                EvToEbitda:        null,
+                ProfitMargin:      GetNullableDouble(m, "netProfitMarginTTM"),
+                OperatingMargin:   GetNullableDouble(m, "operatingMarginTTM"),
+                ReturnOnEquity:    GetNullableDouble(m, "roeTTM"),
+                ReturnOnAssets:    GetNullableDouble(m, "roaTTM"),
+                RevenueGrowthYoy:  GetNullableDouble(m, "revenueGrowthQuarterlyYoy"),
+                EarningsGrowthYoy: GetNullableDouble(m, "epsGrowthQuarterlyYoy"),
+                DebtToEquity:      GetNullableDouble(m, "totalDebt/totalEquityQuarterly"),
+                CurrentRatio:      GetNullableDouble(m, "currentRatioQuarterly"),
+                QuickRatio:        GetNullableDouble(m, "quickRatioQuarterly"),
+                DividendYield:     GetNullableDouble(m, "dividendYieldIndicatedAnnual"),
+                PayoutRatio:       GetNullableDouble(m, "payoutRatioTTM"),
+                MarketCap:         GetNullableDouble(m, "marketCapitalization"),
+                Revenue:           GetNullableDouble(m, "revenueTTM"),
+                NetIncome:         GetNullableDouble(m, "netIncomeTTM"),
+                SharesOutstanding: null,
+                FetchedAt:         DateTime.UtcNow
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("GetFinancialMetrics mislukt voor {Symbol}: {Message}", symbol, ex.Message);
+            return null;
+        }
+    }
+
+    public async Task<InsiderTransaction[]> GetInsiderTransactions(string symbol, int months = 3)
+    {
+        await RateLimit();
+        var url = $"{BaseUrl}/stock/insider-transactions?symbol={symbol}&token={_apiKey}";
+        try
+        {
+            var json = await _http.GetStringAsync(url);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            if (!root.TryGetProperty("data", out var data)) return Array.Empty<InsiderTransaction>();
+
+            var cutoff = DateTime.UtcNow.AddMonths(-months);
+
+            return data.EnumerateArray()
+                .Select(t =>
+                {
+                    var dateStr = t.TryGetProperty("transactionDate", out var d) ? d.GetString() : null;
+                    if (!DateTime.TryParse(dateStr, out var date)) return null;
+                    if (date < cutoff) return null;
+
+                    var shares = t.TryGetProperty("share", out var sh) ? sh.GetInt64() : 0;
+                    var price  = t.TryGetProperty("transactionPrice", out var p) && p.ValueKind != JsonValueKind.Null ? p.GetDouble() : 0;
+
+                    return new InsiderTransaction(
+                        Symbol:          symbol,
+                        Name:            t.TryGetProperty("name",            out var n)  ? n.GetString()  ?? "" : "",
+                        Relation:        t.TryGetProperty("filingRelation",  out var r)  ? r.GetString()  ?? "" : "",
+                        TransactionType: t.TryGetProperty("transactionType", out var tt) ? tt.GetString() ?? "" : "",
+                        Date:            date,
+                        Shares:          Math.Abs(shares),
+                        PricePerShare:   price,
+                        TotalValue:      Math.Abs(shares) * price
+                    );
+                })
+                .Where(t => t != null)
+                .Cast<InsiderTransaction>()
+                .OrderByDescending(t => t.Date)
+                .Take(50)
+                .ToArray();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("GetInsiderTransactions mislukt voor {Symbol}: {Message}", symbol, ex.Message);
+            return Array.Empty<InsiderTransaction>();
+        }
+    }
+
+    public async Task<PriceTarget?> GetPriceTarget(string symbol)
+    {
+        await RateLimit();
+        var url = $"{BaseUrl}/stock/price-target?symbol={symbol}&token={_apiKey}";
+        try
+        {
+            var json = await _http.GetStringAsync(url);
+            using var doc = JsonDocument.Parse(json);
+            var r = doc.RootElement;
+
+            if (!r.TryGetProperty("targetHigh", out _)) return null;
+
+            return new PriceTarget(
+                Symbol:           symbol,
+                TargetHigh:       r.TryGetProperty("targetHigh",   out var h)  ? h.GetDouble()  : 0,
+                TargetLow:        r.TryGetProperty("targetLow",    out var l)  ? l.GetDouble()  : 0,
+                TargetMean:       r.TryGetProperty("targetMean",   out var m)  ? m.GetDouble()  : 0,
+                TargetMedian:     r.TryGetProperty("targetMedian", out var md) ? md.GetDouble() : 0,
+                NumberOfAnalysts: 0,
+                FetchedAt:        DateTime.UtcNow
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("GetPriceTarget mislukt voor {Symbol}: {Message}", symbol, ex.Message);
+            return null;
+        }
+    }
+
+    private static double? GetNullableDouble(JsonElement element, string property)
+    {
+        if (!element.TryGetProperty(property, out var prop)) return null;
+        if (prop.ValueKind == JsonValueKind.Null) return null;
+        try { return prop.GetDouble(); } catch { return null; }
+    }
 }

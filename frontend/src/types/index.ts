@@ -96,3 +96,61 @@ export interface TrendingSymbol {
   articleCount: number;
   avgSentiment: number;
 }
+
+// Company Fundamentals
+export interface CompanyFundamentals {
+  id: number;
+  symbol: string;
+  // Valuation
+  peRatio: number | null;
+  forwardPe: number | null;
+  pbRatio: number | null;
+  psRatio: number | null;
+  evToEbitda: number | null;
+  // Profitability
+  profitMargin: number | null;
+  operatingMargin: number | null;
+  returnOnEquity: number | null;
+  returnOnAssets: number | null;
+  // Growth
+  revenueGrowthYoy: number | null;
+  earningsGrowthYoy: number | null;
+  // Balance sheet
+  debtToEquity: number | null;
+  currentRatio: number | null;
+  quickRatio: number | null;
+  // Dividends
+  dividendYield: number | null;
+  payoutRatio: number | null;
+  // Size
+  marketCap: number | null;
+  revenue: number | null;
+  netIncome: number | null;
+  sharesOutstanding: number | null;
+  // Analyst
+  analystBuy: number | null;
+  analystHold: number | null;
+  analystSell: number | null;
+  analystStrongBuy: number | null;
+  analystStrongSell: number | null;
+  targetPriceHigh: number | null;
+  targetPriceLow: number | null;
+  targetPriceMean: number | null;
+  targetPriceMedian: number | null;
+  // Meta
+  fetchedAt: string;
+  updatedAt: string;
+}
+
+export interface InsiderTransaction {
+  id: number;
+  symbol: string;
+  name: string;
+  relation: string;
+  transactionType: string;
+  transactionDate: string;
+  shares: number;
+  pricePerShare: number;
+  totalValue: number;
+  fetchedAt: string;
+}
