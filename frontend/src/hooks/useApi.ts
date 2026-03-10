@@ -165,3 +165,28 @@ export function useTestProvider() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'providers'] }),
   });
 }
+
+// Admin — Algo Settings
+export function useAlgoSettings() {
+  return useQuery({
+    queryKey: ['algo-settings'],
+    queryFn: () => api.get<Record<string, unknown>>('/v1/admin/settings'),
+  });
+}
+
+export function useUpdateAlgoSetting() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ key, value }: { key: string; value: unknown }) =>
+      api.put(`/v1/admin/settings/${key}`, value),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['algo-settings'] }),
+  });
+}
+
+export function useResetAlgoSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post('/v1/admin/settings/reset', {}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['algo-settings'] }),
+  });
+}

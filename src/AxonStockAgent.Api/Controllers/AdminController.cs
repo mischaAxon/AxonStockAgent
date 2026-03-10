@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AxonStockAgent.Api.Data;
 using AxonStockAgent.Api.Services;
 using AxonStockAgent.Core.Interfaces;
@@ -14,11 +15,13 @@ public class AdminController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly ProviderManager _providers;
+    private readonly AlgoSettingsService _algoSettings;
 
-    public AdminController(AppDbContext db, ProviderManager providers)
+    public AdminController(AppDbContext db, ProviderManager providers, AlgoSettingsService algoSettings)
     {
-        _db        = db;
-        _providers = providers;
+        _db           = db;
+        _providers    = providers;
+        _algoSettings = algoSettings;
     }
 
     // ── Users ──────────────────────────────────────────────────────────────────
@@ -52,10 +55,22 @@ public class AdminController : ControllerBase
     // ── Settings ───────────────────────────────────────────────────────────────
 
     [HttpGet("settings")]
-    public IActionResult GetSettings() => Ok(new { data = new { } });
+    public async Task<IActionResult> GetSettings()
+        => Ok(await _algoSettings.GetAll());
 
-    [HttpPut("settings")]
-    public IActionResult UpdateSettings() => Ok();
+    [HttpPut("settings/{key}")]
+    public async Task<IActionResult> UpdateSetting(string key, [FromBody] JsonElement value)
+    {
+        await _algoSettings.Set(key, value);
+        return Ok();
+    }
+
+    [HttpPost("settings/reset")]
+    public async Task<IActionResult> ResetSettings()
+    {
+        await _algoSettings.ResetAll();
+        return Ok();
+    }
 
     // ── Providers ──────────────────────────────────────────────────────────────
 

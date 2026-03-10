@@ -64,6 +64,7 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<ProviderManager>();
 builder.Services.AddScoped<SectorService>();
 builder.Services.AddScoped<NewsService>();
+builder.Services.AddScoped<AlgoSettingsService>();
 builder.Services.AddHostedService<NewsFetcherService>();
 
 var app = builder.Build();

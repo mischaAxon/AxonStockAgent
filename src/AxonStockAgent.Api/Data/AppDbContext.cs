@@ -14,8 +14,7 @@ public class AppDbContext : DbContext
     public DbSet<UserEntity> Users => Set<UserEntity>();
     public DbSet<RefreshTokenEntity> RefreshTokens => Set<RefreshTokenEntity>();
     public DbSet<DataProviderEntity> DataProviders => Set<DataProviderEntity>();
-    public DbSet<NewsArticleEntity> NewsArticles { get; set; } = null!;
-    public DbSet<SectorSentimentEntity> SectorSentiment { get; set; } = null!;
+    public DbSet<AlgoSettingsEntity> AlgoSettings { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -85,16 +84,10 @@ public class AppDbContext : DbContext
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
         });
 
-        modelBuilder.Entity<NewsArticleEntity>(e => {
-            e.ToTable("news_articles");
-            e.HasIndex(x => x.Symbol);
-            e.HasIndex(x => x.Sector);
-            e.HasIndex(x => x.PublishedAt).IsDescending();
-        });
-
-        modelBuilder.Entity<SectorSentimentEntity>(e => {
-            e.ToTable("sector_sentiment");
-            e.HasIndex(x => new { x.Sector, x.CalculatedAt });
+        modelBuilder.Entity<AlgoSettingsEntity>(e =>
+        {
+            e.ToTable("algo_settings");
+            e.HasIndex(x => x.Key).IsUnique();
         });
     }
 }

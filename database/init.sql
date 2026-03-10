@@ -222,3 +222,20 @@ CREATE TABLE IF NOT EXISTS sector_sentiment (
     calculated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_sector_sentiment_sector_calc ON sector_sentiment(sector, calculated_at);
+
+-- Algo settings
+CREATE TABLE IF NOT EXISTS algo_settings (
+    id         SERIAL PRIMARY KEY,
+    key        VARCHAR(100) NOT NULL,
+    value      TEXT NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    CONSTRAINT algo_settings_key_unique UNIQUE (key)
+);
+
+INSERT INTO algo_settings (key, value) VALUES
+    ('weights',           '{"technical":0.35,"ml":0.25,"sentiment":0.15,"claude":0.25}'),
+    ('thresholds',        '{"bull":0.35,"bear":-0.35}'),
+    ('technical_weights', '{"trend":3,"momentum":2,"volatility":1,"volume":2}'),
+    ('scan',              '{"intervalMinutes":15,"cooldownMinutes":60,"candleHistory":100,"timeframe":"D"}'),
+    ('features',          '{"enableMl":true,"enableClaude":true,"enableSentiment":true,"enableNewsFetcher":true}')
+ON CONFLICT (key) DO NOTHING;

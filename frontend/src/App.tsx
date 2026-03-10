@@ -11,6 +11,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import AdminUsersPage from './pages/AdminUsersPage';
 import AdminProvidersPage from './pages/AdminProvidersPage';
+import AdminSettingsPage from './pages/AdminSettingsPage';
 
 export default function App() {
   return (
@@ -48,6 +49,14 @@ export default function App() {
           element={
             <ProtectedRoute requireAdmin>
               <AdminProvidersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/settings"
+          element={
+            <ProtectedRoute requireAdmin>
+              <AdminSettingsPage />
             </ProtectedRoute>
           }
         />
