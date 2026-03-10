@@ -70,7 +70,11 @@ public class ProviderManager
                 apiKey ?? "",
                 _sp.GetRequiredService<ILogger<FinnhubProvider>>()),
 
-            // Toekomstige providers worden hier toegevoegd
+            "eodhd" => new EodhdProvider(
+                _sp.GetRequiredService<IHttpClientFactory>().CreateClient("eodhd"),
+                apiKey ?? "",
+                _sp.GetRequiredService<ILogger<EodhdProvider>>()),
+
             _ => LogUnknown(config.Name)
         };
     }
