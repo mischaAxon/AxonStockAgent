@@ -71,7 +71,7 @@ export function useUpsertPortfolio() {
   });
 }
 
-// Admin
+// Admin — Users
 export function useAdminUsers() {
   return useQuery({
     queryKey: ['admin', 'users'],
@@ -85,5 +85,31 @@ export function useUpdateUser() {
     mutationFn: ({ id, ...data }: { id: string; role?: string; isActive?: boolean }) =>
       api.put(`/v1/admin/users/${id}`, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }),
+  });
+}
+
+// Admin — Providers
+export function useProviders() {
+  return useQuery({
+    queryKey: ['admin', 'providers'],
+    queryFn: () => api.get<ApiResponse<unknown[]>>('/v1/admin/providers'),
+  });
+}
+
+export function useUpdateProvider() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, ...data }: { name: string; isEnabled?: boolean; apiKey?: string; configJson?: string }) =>
+      api.put(`/v1/admin/providers/${name}`, data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'providers'] }),
+  });
+}
+
+export function useTestProvider() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) =>
+      api.post(`/v1/admin/providers/${name}/test`, {}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'providers'] }),
   });
 }

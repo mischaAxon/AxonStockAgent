@@ -1,13 +1,25 @@
 import { Outlet, NavLink } from 'react-router-dom';
-import { LayoutDashboard, Activity, Eye, Briefcase, Users, LogOut } from 'lucide-react';
+import { LayoutDashboard, Activity, Eye, Briefcase, Users, Plug, LogOut } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const navItems = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/signals', label: 'Signalen', icon: Activity },
-  { to: '/watchlist', label: 'Watchlist', icon: Eye },
-  { to: '/portfolio', label: 'Portfolio', icon: Briefcase },
+  { to: '/',          label: 'Dashboard', icon: LayoutDashboard, end: true  },
+  { to: '/signals',   label: 'Signalen',  icon: Activity,        end: false },
+  { to: '/watchlist', label: 'Watchlist', icon: Eye,             end: false },
+  { to: '/portfolio', label: 'Portfolio', icon: Briefcase,       end: false },
 ];
+
+const adminItems = [
+  { to: '/admin/users',     label: 'Gebruikers', icon: Users },
+  { to: '/admin/providers', label: 'Providers',  icon: Plug  },
+];
+
+const navLinkClass = (isActive: boolean) =>
+  `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+    isActive
+      ? 'bg-axon-600/20 text-axon-400'
+      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+  }`;
 
 export default function Layout() {
   const { user, isAdmin, logout } = useAuth();
@@ -23,19 +35,14 @@ export default function Layout() {
           <p className="text-xs text-gray-500 mt-1">AI-Powered Screener</p>
         </div>
 
+        {/* Main nav */}
         <nav className="space-y-1">
-          {navItems.map(({ to, label, icon: Icon }) => (
+          {navItems.map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
-              end={to === '/'}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-axon-600/20 text-axon-400'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                }`
-              }
+              end={end}
+              className={({ isActive }) => navLinkClass(isActive)}
             >
               <Icon size={18} />
               {label}
@@ -43,24 +50,24 @@ export default function Layout() {
           ))}
         </nav>
 
+        {/* Admin nav */}
         {isAdmin && (
           <div className="mt-6">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-3 mb-2">
               Admin
             </p>
-            <NavLink
-              to="/admin/users"
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-axon-600/20 text-axon-400'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                }`
-              }
-            >
-              <Users size={18} />
-              Gebruikers
-            </NavLink>
+            <nav className="space-y-1">
+              {adminItems.map(({ to, label, icon: Icon }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  className={({ isActive }) => navLinkClass(isActive)}
+                >
+                  <Icon size={18} />
+                  {label}
+                </NavLink>
+              ))}
+            </nav>
           </div>
         )}
 

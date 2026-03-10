@@ -13,6 +13,7 @@ public class AppDbContext : DbContext
     public DbSet<DividendEntity> Dividends => Set<DividendEntity>();
     public DbSet<UserEntity> Users => Set<UserEntity>();
     public DbSet<RefreshTokenEntity> RefreshTokens => Set<RefreshTokenEntity>();
+    public DbSet<DataProviderEntity> DataProviders => Set<DataProviderEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -68,6 +69,17 @@ public class AppDbContext : DbContext
              .HasForeignKey(x => x.UserId)
              .OnDelete(DeleteBehavior.Cascade);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+        });
+
+        modelBuilder.Entity<DataProviderEntity>(e =>
+        {
+            e.ToTable("data_providers");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.Name).IsUnique();
+            e.Property(x => x.IsEnabled).HasDefaultValue(false);
+            e.Property(x => x.HealthStatus).HasDefaultValue("unknown");
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
         });
     }
 }

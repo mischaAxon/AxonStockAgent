@@ -8,12 +8,13 @@ import PortfolioPage from './pages/PortfolioPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import AdminUsersPage from './pages/AdminUsersPage';
+import AdminProvidersPage from './pages/AdminProvidersPage';
 
 export default function App() {
   return (
     <Routes>
       {/* Public routes */}
-      <Route path="/login" element={<LoginPage />} />
+      <Route path="/login"    element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
 
       {/* Protected routes */}
@@ -24,8 +25,8 @@ export default function App() {
           </ProtectedRoute>
         }
       >
-        <Route path="/" element={<DashboardPage />} />
-        <Route path="/signals" element={<SignalsPage />} />
+        <Route path="/"          element={<DashboardPage />} />
+        <Route path="/signals"   element={<SignalsPage />} />
         <Route path="/watchlist" element={<WatchlistPage />} />
         <Route path="/portfolio" element={<PortfolioPage />} />
 
@@ -35,6 +36,14 @@ export default function App() {
           element={
             <ProtectedRoute requireAdmin>
               <AdminUsersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/providers"
+          element={
+            <ProtectedRoute requireAdmin>
+              <AdminProvidersPage />
             </ProtectedRoute>
           }
         />
