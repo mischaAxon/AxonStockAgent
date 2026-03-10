@@ -25,6 +25,12 @@ export interface WatchlistItem {
   exchange: string | null;
   name: string | null;
   sector: string | null;
+  industry: string | null;
+  country: string | null;
+  marketCap: number | null;
+  logo: string | null;
+  webUrl: string | null;
+  sectorSource: string | null;
   isActive: boolean;
   addedAt: string;
 }

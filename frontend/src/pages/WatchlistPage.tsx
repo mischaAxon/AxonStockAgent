@@ -1,57 +1,160 @@
 import { useState } from 'react';
 import { useWatchlist, useAddToWatchlist, useRemoveFromWatchlist } from '../hooks/useApi';
 import { Plus, X } from 'lucide-react';
+import type { WatchlistItem } from '../types';
+
+/** Converteert een 2-letter ISO landcode naar vlag-emoji */
+function countryFlag(code: string | null): string {
+  if (!code || code.length !== 2) return '';
+  return code.toUpperCase().replace(/./g, c =>
+    String.fromCodePoint(c.charCodeAt(0) + 127397));
+}
+
+const SECTOR_COLORS: Record<string, string> = {
+  'Technology':               'bg-blue-500/15 text-blue-400',
+  'Healthcare':               'bg-green-500/15 text-green-400',
+  'Financials':               'bg-emerald-500/15 text-emerald-400',
+  'Finance':                  'bg-emerald-500/15 text-emerald-400',
+  'Consumer Staples':         'bg-orange-500/15 text-orange-400',
+  'Consumer Discretionary':   'bg-amber-500/15 text-amber-400',
+  'Energy':                   'bg-yellow-500/15 text-yellow-400',
+  'Industrials':              'bg-slate-500/15 text-slate-400',
+  'Materials':                'bg-stone-500/15 text-stone-400',
+  'Real Estate':              'bg-rose-500/15 text-rose-400',
+  'Utilities':                'bg-cyan-500/15 text-cyan-400',
+  'Communication Services':   'bg-purple-500/15 text-purple-400',
+};
+
+function sectorColor(sector: string | null) {
+  return SECTOR_COLORS[sector ?? ''] ?? 'bg-gray-500/15 text-gray-400';
+}
 
 export default function WatchlistPage() {
-  const { data, isLoading } = useWatchlist();
-  const addMutation = useAddToWatchlist();
-  const removeMutation = useRemoveFromWatchlist();
-  const [newSymbol, setNewSymbol] = useState('');
+  const { data, isLoading }  = useWatchlist();
+  const addMutation          = useAddToWatchlist();
+  const removeMutation       = useRemoveFromWatchlist();
+  const [newSymbol, setNewSymbol]       = useState('');
+  const [sectorFilter, setSectorFilter] = useState('');
 
-  const handleAdd = () => {
+  const items: WatchlistItem[] = data?.data ?? [];
+  const sectors = [...new Set(items.map(i => i.sector).filter(Boolean))] as string[];
+  const filtered = sectorFilter
+    ? items.filter(i => i.sector === sectorFilter)
+    : items;
+
+  function handleAdd() {
     if (!newSymbol.trim()) return;
     addMutation.mutate({ symbol: newSymbol.trim().toUpperCase() });
     setNewSymbol('');
-  };
+  }
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-white mb-6">Watchlist</h2>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6 gap-4">
+        <h2 className="text-2xl font-bold text-white">Watchlist</h2>
+        {sectors.length > 0 && (
+          <select
+            value={sectorFilter}
+            onChange={e => setSectorFilter(e.target.value)}
+            className="bg-gray-800 border border-gray-700 text-sm text-white rounded-lg px-3 py-2 focus:outline-none focus:border-axon-400 transition-colors"
+          >
+            <option value="">Alle sectoren</option>
+            {sectors.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        )}
+      </div>
 
-      {/* Add symbol */}
+      {/* Symbol toevoegen */}
       <div className="flex gap-2 mb-6">
         <input
           type="text"
           value={newSymbol}
-          onChange={(e) => setNewSymbol(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+          onChange={e => setNewSymbol(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleAdd()}
           placeholder="Symbol toevoegen (bijv. ASML.AS)"
-          className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-axon-500 w-72"
+          className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-axon-400 w-72 text-sm"
         />
-        <button onClick={handleAdd} className="bg-axon-600 hover:bg-axon-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors">
+        <button
+          onClick={handleAdd}
+          disabled={addMutation.isPending}
+          className="bg-axon-600 hover:bg-axon-500 disabled:opacity-50 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors"
+        >
           <Plus size={16} /> Toevoegen
         </button>
       </div>
 
       {isLoading ? (
-        <p className="text-gray-400">Laden...</p>
+        <p className="text-gray-400 text-sm">Laden…</p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {(data?.data || []).map((item) => (
-            <div key={item.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between">
-              <div>
-                <span className="font-mono font-bold text-white text-lg">{item.symbol}</span>
-                {item.name && <p className="text-sm text-gray-400">{item.name}</p>}
-                {item.exchange && <p className="text-xs text-gray-500">{item.exchange}</p>}
+          {filtered.map(item => (
+            <div
+              key={item.id}
+              className="bg-gray-900 border border-gray-800 rounded-xl p-4"
+            >
+              {/* Bovenste rij: logo + symbool + land + verwijder */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-3 min-w-0">
+                  {item.logo ? (
+                    <img
+                      src={item.logo}
+                      alt={item.name ?? item.symbol}
+                      className="w-8 h-8 rounded-lg object-contain bg-white/5 p-0.5 flex-shrink-0"
+                      onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  ) : (
+                    <div className="w-8 h-8 rounded-lg bg-gray-800 flex items-center justify-center flex-shrink-0">
+                      <span className="text-xs text-gray-400 font-mono">
+                        {item.symbol.slice(0, 2)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono font-bold text-white">{item.symbol}</span>
+                      {item.country && (
+                        <span className="text-base leading-none">
+                          {countryFlag(item.country)}
+                        </span>
+                      )}
+                    </div>
+                    {item.name && (
+                      <p className="text-xs text-gray-400 truncate mt-0.5">{item.name}</p>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={() => removeMutation.mutate(item.symbol)}
+                  className="text-gray-600 hover:text-red-400 transition-colors p-1 flex-shrink-0"
+                >
+                  <X size={15} />
+                </button>
               </div>
-              <button
-                onClick={() => removeMutation.mutate(item.symbol)}
-                className="text-gray-500 hover:text-red-400 transition-colors p-1"
-              >
-                <X size={18} />
-              </button>
+
+              {/* Sector + Industry badges */}
+              {(item.sector || item.industry) && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {item.sector && (
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${sectorColor(item.sector)}`}>
+                      {item.sector}
+                    </span>
+                  )}
+                  {item.industry && (
+                    <span className="px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-400">
+                      {item.industry}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           ))}
+
+          {filtered.length === 0 && !isLoading && (
+            <p className="text-gray-500 text-sm col-span-full">
+              {sectorFilter ? `Geen aandelen in sector "${sectorFilter}"` : 'Watchlist is leeg'}
+            </p>
+          )}
         </div>
       )}
     </div>

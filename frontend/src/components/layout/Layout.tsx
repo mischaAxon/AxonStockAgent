@@ -1,11 +1,12 @@
 import { Outlet, NavLink } from 'react-router-dom';
-import { LayoutDashboard, Activity, Eye, Briefcase, Users, Plug, LogOut } from 'lucide-react';
+import { LayoutDashboard, Activity, Eye, Grid2x2, Briefcase, Users, Plug, LogOut } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const navItems = [
   { to: '/',          label: 'Dashboard', icon: LayoutDashboard, end: true  },
   { to: '/signals',   label: 'Signalen',  icon: Activity,        end: false },
   { to: '/watchlist', label: 'Watchlist', icon: Eye,             end: false },
+  { to: '/sectors',   label: 'Sectoren',  icon: Grid2x2,         end: false },
   { to: '/portfolio', label: 'Portfolio', icon: Briefcase,       end: false },
 ];
 
