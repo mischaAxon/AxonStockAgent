@@ -156,7 +156,6 @@ export default function AdminSettingsPage() {
         >
           <Save className="w-4 h-4" /> {saved === 'technical_weights' ? 'Opgeslagen!' : 'Opslaan'}
         </button>
- wszystkich
       </Section>
 
       {/* Thresholds */}
