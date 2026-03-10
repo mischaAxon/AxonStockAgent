@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
-import type { ApiResponse, PaginatedResponse, DashboardData, Signal, WatchlistItem, PortfolioItem, NewsArticle, SectorSentiment, TrendingSymbol, CompanyFundamentals, InsiderTransaction } from '../types';
+import type { ApiResponse, PaginatedResponse, DashboardData, Signal, WatchlistItem, PortfolioItem, NewsArticle, SectorSentiment, TrendingSymbol, CompanyFundamentals, InsiderTransaction, AlgoSetting, AlgoSettingsResponse } from '../types';
 
 // Dashboard
 export function useDashboard() {
@@ -190,5 +190,30 @@ export function useRefreshAllFundamentals() {
   return useMutation({
     mutationFn: () => api.post('/v1/fundamentals/refresh-all', {}),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['fundamentals'] }),
+  });
+}
+
+// Admin — Algo Settings
+export function useAlgoSettings() {
+  return useQuery({
+    queryKey: ['admin', 'settings'],
+    queryFn: () => api.get<ApiResponse<AlgoSettingsResponse>>('/v1/admin/settings'),
+  });
+}
+
+export function useUpdateAlgoSetting() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, value }: { id: number; value: string }) =>
+      api.put(`/v1/admin/settings/${id}`, { value }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] }),
+  });
+}
+
+export function useResetAlgoSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post('/v1/admin/settings/reset', {}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] }),
   });
 }

@@ -154,3 +154,18 @@ export interface InsiderTransaction {
   totalValue: number;
   fetchedAt: string;
 }
+
+// Algo Settings
+export interface AlgoSetting {
+  id: number;
+  category: string;
+  key: string;
+  value: string;
+  description: string | null;
+  valueType: string;
+  minValue: number | null;
+  maxValue: number | null;
+  updatedAt: string;
+}
+
+export type AlgoSettingsResponse = Record<string, AlgoSetting[]>;

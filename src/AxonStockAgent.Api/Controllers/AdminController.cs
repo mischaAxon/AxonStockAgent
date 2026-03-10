@@ -14,11 +14,13 @@ public class AdminController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly ProviderManager _providers;
+    private readonly AlgoSettingsService _algoSettings;
 
-    public AdminController(AppDbContext db, ProviderManager providers)
+    public AdminController(AppDbContext db, ProviderManager providers, AlgoSettingsService algoSettings)
     {
-        _db        = db;
-        _providers = providers;
+        _db           = db;
+        _providers    = providers;
+        _algoSettings = algoSettings;
     }
 
     // ── Users ──────────────────────────────────────────────────────────────────
@@ -49,13 +51,40 @@ public class AdminController : ControllerBase
         return Ok(new { data = new { user.Id, user.Email, user.Role, user.IsActive } });
     }
 
-    // ── Settings ───────────────────────────────────────────────────────────────
+    // ── Settings (Algo Config) ─────────────────────────────────────────────────
 
     [HttpGet("settings")]
-    public IActionResult GetSettings() => Ok(new { data = new { } });
+    public async Task<IActionResult> GetSettings()
+    {
+        var grouped = await _algoSettings.GetAllGroupedAsync();
+        return Ok(new { data = grouped });
+    }
 
-    [HttpPut("settings")]
-    public IActionResult UpdateSettings() => Ok();
+    [HttpPut("settings/{id:int}")]
+    public async Task<IActionResult> UpdateSetting(int id, [FromBody] UpdateSettingRequest request)
+    {
+        try
+        {
+            var updated = await _algoSettings.UpdateSettingAsync(id, request.Value);
+            return Ok(new { data = updated });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost("settings/reset")]
+    public async Task<IActionResult> ResetSettings()
+    {
+        await _algoSettings.ResetToDefaultsAsync();
+        var grouped = await _algoSettings.GetAllGroupedAsync();
+        return Ok(new { data = grouped, message = "Settings gereset naar standaardwaarden" });
+    }
 
     // ── Providers ──────────────────────────────────────────────────────────────
 
@@ -148,3 +177,4 @@ public class AdminController : ControllerBase
 
 public record UpdateUserRequest(string? Role = null, bool? IsActive = null);
 public record UpdateProviderRequest(bool? IsEnabled = null, string? ApiKey = null, string? ConfigJson = null);
+public record UpdateSettingRequest(string Value);

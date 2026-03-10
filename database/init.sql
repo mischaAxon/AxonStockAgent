@@ -177,6 +177,42 @@ ON CONFLICT (name) DO NOTHING;
 -- Update EODHD provider type naar 'all' (ondersteunt market data + news + fundamentals)
 UPDATE data_providers SET provider_type = 'all' WHERE name = 'eodhd';
 
+-- Algo settings: configureerbare gewichten en thresholds per categorie
+CREATE TABLE IF NOT EXISTS algo_settings (
+    id          SERIAL PRIMARY KEY,
+    category    VARCHAR(50)  NOT NULL,
+    key         VARCHAR(100) NOT NULL,
+    value       TEXT         NOT NULL,
+    description TEXT,
+    value_type  VARCHAR(20)  NOT NULL DEFAULT 'decimal',
+    min_value   DOUBLE PRECISION,
+    max_value   DOUBLE PRECISION,
+    updated_at  TIMESTAMPTZ  DEFAULT NOW(),
+    UNIQUE(category, key)
+);
+
+-- Seed algo settings: gewichten (moeten optellen tot 1.0 per groep)
+INSERT INTO algo_settings (category, key, value, description, value_type, min_value, max_value) VALUES
+    -- Score gewichten (moeten optellen tot 1.0)
+    ('weights', 'technical_weight',  '0.30', 'Gewicht technische analyse in eindscore',    'decimal', 0.0, 1.0),
+    ('weights', 'ml_weight',         '0.25', 'Gewicht ML-voorspelling in eindscore',       'decimal', 0.0, 1.0),
+    ('weights', 'sentiment_weight',  '0.20', 'Gewicht nieuwssentiment in eindscore',       'decimal', 0.0, 1.0),
+    ('weights', 'claude_weight',     '0.15', 'Gewicht Claude AI-analyse in eindscore',     'decimal', 0.0, 1.0),
+    ('weights', 'fundamental_weight','0.10', 'Gewicht fundamentele analyse in eindscore',  'decimal', 0.0, 1.0),
+    -- Thresholds
+    ('thresholds', 'buy_threshold',     '0.65', 'Minimum score voor BUY signaal',       'decimal', 0.0, 1.0),
+    ('thresholds', 'sell_threshold',    '0.35', 'Maximum score voor SELL signaal',       'decimal', 0.0, 1.0),
+    ('thresholds', 'squeeze_threshold', '0.80', 'Minimum score voor SQUEEZE signaal',   'decimal', 0.0, 1.0),
+    -- Scan instellingen
+    ('scan', 'scan_interval_minutes', '30',    'Interval tussen watchlist scans',        'integer', 5,   1440),
+    ('scan', 'lookback_days',         '90',    'Aantal dagen historische data',          'integer', 30,  365),
+    ('scan', 'min_volume',            '100000','Minimum gemiddeld volume',               'integer', 0,   null),
+    -- Notificatie instellingen
+    ('notifications', 'notify_buy',     'true',  'Notificeer bij BUY signalen',     'boolean', null, null),
+    ('notifications', 'notify_sell',    'true',  'Notificeer bij SELL signalen',    'boolean', null, null),
+    ('notifications', 'notify_squeeze', 'true',  'Notificeer bij SQUEEZE signalen', 'boolean', null, null)
+ON CONFLICT (category, key) DO NOTHING;
+
 -- Seed default watchlist
 INSERT INTO watchlist (symbol, exchange, name) VALUES
     ('ASML.AS',  'Euronext AMS', 'ASML Holding'),

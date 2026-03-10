@@ -18,6 +18,7 @@ public class AppDbContext : DbContext
     public DbSet<SectorSentimentEntity> SectorSentiment { get; set; } = null!;
     public DbSet<CompanyFundamentalsEntity> CompanyFundamentals => Set<CompanyFundamentalsEntity>();
     public DbSet<InsiderTransactionEntity> InsiderTransactions => Set<InsiderTransactionEntity>();
+    public DbSet<AlgoSettingsEntity> AlgoSettings => Set<AlgoSettingsEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -116,6 +117,14 @@ public class AppDbContext : DbContext
             e.HasIndex(x => x.TransactionDate);
             e.HasIndex(x => new { x.Symbol, x.Name, x.TransactionDate }).IsUnique();
             e.Property(x => x.FetchedAt).HasDefaultValueSql("NOW()");
+        });
+
+        modelBuilder.Entity<AlgoSettingsEntity>(e =>
+        {
+            e.ToTable("algo_settings");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.Category, x.Key }).IsUnique();
+            e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
         });
     }
 }
