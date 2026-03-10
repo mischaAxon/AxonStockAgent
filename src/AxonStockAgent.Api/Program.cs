@@ -12,8 +12,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // JWT Authentication
-var jwtSecret = builder.Configuration["Jwt:Secret"] ?? throw new InvalidOperationException("Jwt:Secret is not configured");
-var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "AxonStockAgent";
+var jwtSecret   = builder.Configuration["Jwt:Secret"]   ?? throw new InvalidOperationException("Jwt:Secret is not configured");
+var jwtIssuer   = builder.Configuration["Jwt:Issuer"]   ?? "AxonStockAgent";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "AxonStockAgent";
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -22,13 +22,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
-            ValidateIssuer = true,
-            ValidIssuer = jwtIssuer,
-            ValidateAudience = true,
-            ValidAudience = jwtAudience,
-            ValidateLifetime = true,
-            ClockSkew = TimeSpan.Zero
+            IssuerSigningKey        = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+            ValidateIssuer          = true,
+            ValidIssuer             = jwtIssuer,
+            ValidateAudience        = true,
+            ValidAudience           = jwtAudience,
+            ValidateLifetime        = true,
+            ClockSkew               = TimeSpan.Zero
         };
     });
 
@@ -46,6 +46,9 @@ builder.Services.AddCors(options =>
     });
 });
 
+// HTTP client factory (gebruikt door ProviderManager)
+builder.Services.AddHttpClient();
+
 // Controllers + Swagger
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -57,6 +60,7 @@ builder.Services.AddSwaggerGen(c =>
 // Services
 builder.Services.AddScoped<JwtService>();
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<ProviderManager>();
 
 var app = builder.Build();
 
