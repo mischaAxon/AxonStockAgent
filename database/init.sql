@@ -174,6 +174,9 @@ VALUES
     ('saxo',          'Saxo Bank OpenAPI',      'market_data',  120, true,  false, false, 0)
 ON CONFLICT (name) DO NOTHING;
 
+-- Update EODHD provider type naar 'all' (ondersteunt market data + news + fundamentals)
+UPDATE data_providers SET provider_type = 'all' WHERE name = 'eodhd';
+
 -- Seed default watchlist
 INSERT INTO watchlist (symbol, exchange, name) VALUES
     ('ASML.AS',  'Euronext AMS', 'ASML Holding'),
