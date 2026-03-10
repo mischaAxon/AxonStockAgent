@@ -193,3 +193,32 @@ UPDATE watchlist SET sector='Technology',       industry='Consumer Electronics',
 UPDATE watchlist SET sector='Technology',       industry='Semiconductors',       country='US' WHERE symbol='NVDA';
 UPDATE watchlist SET sector='Technology',       industry='Semiconductors',       country='US' WHERE symbol='AMD';
 UPDATE watchlist SET sector='Technology',       industry='Software',             country='US' WHERE symbol='MSFT';
+
+-- News articles
+CREATE TABLE IF NOT EXISTS news_articles (
+    id              SERIAL PRIMARY KEY,
+    source          VARCHAR(50) NOT NULL,
+    headline        TEXT NOT NULL,
+    summary         TEXT,
+    url             TEXT,
+    symbol          VARCHAR(20),
+    sector          VARCHAR(100),
+    sentiment_score DOUBLE PRECISION NOT NULL DEFAULT 0,
+    published_at    TIMESTAMP WITH TIME ZONE NOT NULL,
+    fetched_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_news_symbol    ON news_articles(symbol);
+CREATE INDEX IF NOT EXISTS idx_news_sector    ON news_articles(sector);
+CREATE INDEX IF NOT EXISTS idx_news_published ON news_articles(published_at DESC);
+
+-- Sector sentiment snapshots
+CREATE TABLE IF NOT EXISTS sector_sentiment (
+    id            SERIAL PRIMARY KEY,
+    sector        VARCHAR(100) NOT NULL,
+    avg_sentiment DOUBLE PRECISION NOT NULL,
+    article_count INTEGER NOT NULL,
+    period_start  TIMESTAMP WITH TIME ZONE NOT NULL,
+    period_end    TIMESTAMP WITH TIME ZONE NOT NULL,
+    calculated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_sector_sentiment_sector_calc ON sector_sentiment(sector, calculated_at);

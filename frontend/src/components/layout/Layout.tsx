@@ -1,6 +1,7 @@
 import { Outlet, NavLink } from 'react-router-dom';
-import { LayoutDashboard, Activity, Eye, Grid2x2, Briefcase, Users, Plug, LogOut } from 'lucide-react';
+import { LayoutDashboard, Activity, Eye, Grid2x2, Briefcase, Users, Plug, LogOut, Newspaper } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { NewsTicker } from '../NewsTicker';
 
 const navItems = [
   { to: '/',          label: 'Dashboard', icon: LayoutDashboard, end: true  },
@@ -8,6 +9,7 @@ const navItems = [
   { to: '/watchlist', label: 'Watchlist', icon: Eye,             end: false },
   { to: '/sectors',   label: 'Sectoren',  icon: Grid2x2,         end: false },
   { to: '/portfolio', label: 'Portfolio', icon: Briefcase,       end: false },
+  { to: '/news',      label: 'Nieuws',    icon: Newspaper,       end: false },
 ];
 
 const adminItems = [
@@ -96,8 +98,11 @@ export default function Layout() {
       </aside>
 
       {/* Main content */}
-      <main className="ml-64 p-8">
-        <Outlet />
+      <main className="ml-64 flex flex-col min-h-screen">
+        <NewsTicker />
+        <div className="flex-1 p-8">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

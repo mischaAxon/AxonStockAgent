@@ -6,6 +6,7 @@ import SignalsPage from './pages/SignalsPage';
 import WatchlistPage from './pages/WatchlistPage';
 import PortfolioPage from './pages/PortfolioPage';
 import SectorsPage from './pages/SectorsPage';
+import NewsPage from './pages/NewsPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import AdminUsersPage from './pages/AdminUsersPage';
@@ -31,6 +32,7 @@ export default function App() {
         <Route path="/watchlist" element={<WatchlistPage />} />
         <Route path="/sectors"   element={<SectorsPage />} />
         <Route path="/portfolio" element={<PortfolioPage />} />
+        <Route path="/news"      element={<NewsPage />} />
 
         {/* Admin-only routes */}
         <Route
