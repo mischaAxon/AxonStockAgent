@@ -22,6 +22,7 @@ public class AppDbContext : DbContext
             e.ToTable("watchlist");
             e.HasKey(x => x.Id);
             e.HasIndex(x => x.Symbol).IsUnique();
+            e.HasIndex(x => x.Sector); // voor sector filtering
             e.Property(x => x.AddedAt).HasDefaultValueSql("NOW()");
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
         });

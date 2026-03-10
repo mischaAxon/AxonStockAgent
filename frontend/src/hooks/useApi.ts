@@ -71,6 +71,25 @@ export function useUpsertPortfolio() {
   });
 }
 
+// Sectors
+export function useSectors() {
+  return useQuery({
+    queryKey: ['sectors'],
+    queryFn: () => api.get<ApiResponse<{ sector: string; count: number }[]>>('/v1/sectors'),
+  });
+}
+
+export function useEnrichWatchlist() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post('/v1/sectors/enrich', {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['watchlist'] });
+      queryClient.invalidateQueries({ queryKey: ['sectors'] });
+    },
+  });
+}
+
 // Admin — Users
 export function useAdminUsers() {
   return useQuery({
