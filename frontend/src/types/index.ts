@@ -96,3 +96,45 @@ export interface TrendingSymbol {
   articleCount: number;
   avgSentiment: number;
 }
+
+// Algo Settings types
+export interface WeightsConfig {
+  technical: number;
+  ml: number;
+  sentiment: number;
+  claude: number;
+}
+
+export interface TechnicalWeightsConfig {
+  trend: number;
+  momentum: number;
+  volatility: number;
+  volume: number;
+}
+
+export interface ThresholdsConfig {
+  bull: number;
+  bear: number;
+}
+
+export interface ScanConfig {
+  intervalMinutes: number;
+  cooldownMinutes: number;
+  candleHistory: number;
+  timeframe: string;
+}
+
+export interface FeatureFlagsConfig {
+  enableMl: boolean;
+  enableClaude: boolean;
+  enableSentiment: boolean;
+  enableNewsFetcher: boolean;
+}
+
+export interface AlgoSettingsResponse {
+  weights?: WeightsConfig;
+  technical_weights?: TechnicalWeightsConfig;
+  thresholds?: ThresholdsConfig;
+  scan?: ScanConfig;
+  features?: FeatureFlagsConfig;
+}

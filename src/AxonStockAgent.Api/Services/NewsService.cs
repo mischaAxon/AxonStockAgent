@@ -48,7 +48,7 @@ public class NewsService
     public async Task FetchLatestNews()
     {
         var newsProviders = await _providerManager.GetAllNewsProviders();
-        if (newsProviders.Count == 0)
+        if (newsProviders.Length == 0)
         {
             _logger.LogWarning("No active news providers found");
             return;
@@ -65,10 +65,11 @@ public class NewsService
         }
 
         var since = DateTime.UtcNow.AddHours(-24);
-        var existingHeadlines = await _db.NewsArticles
+        var existingHeadlinesList = await _db.NewsArticles
             .Where(n => n.FetchedAt >= since)
             .Select(n => n.Headline)
-            .ToHashSetAsync();
+            .ToListAsync();
+        var existingHeadlines = existingHeadlinesList.ToHashSet();
 
         int saved = 0;
         foreach (var provider in newsProviders)
@@ -77,7 +78,7 @@ public class NewsService
             {
                 try
                 {
-                    var articles = await provider.GetNews(item.Symbol, since, DateTime.UtcNow);
+                    var articles = await provider.GetNews(item.Symbol);
                     foreach (var article in articles)
                     {
                         if (existingHeadlines.Contains(article.Headline))

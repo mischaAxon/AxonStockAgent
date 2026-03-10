@@ -14,6 +14,8 @@ public class AppDbContext : DbContext
     public DbSet<UserEntity> Users => Set<UserEntity>();
     public DbSet<RefreshTokenEntity> RefreshTokens => Set<RefreshTokenEntity>();
     public DbSet<DataProviderEntity> DataProviders => Set<DataProviderEntity>();
+    public DbSet<NewsArticleEntity> NewsArticles => Set<NewsArticleEntity>();
+    public DbSet<SectorSentimentEntity> SectorSentiment => Set<SectorSentimentEntity>();
     public DbSet<AlgoSettingsEntity> AlgoSettings { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

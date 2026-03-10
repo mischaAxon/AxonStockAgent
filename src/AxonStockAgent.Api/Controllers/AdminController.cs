@@ -61,8 +61,15 @@ public class AdminController : ControllerBase
     [HttpPut("settings/{key}")]
     public async Task<IActionResult> UpdateSetting(string key, [FromBody] JsonElement value)
     {
-        await _algoSettings.Set(key, value);
-        return Ok();
+        try
+        {
+            await _algoSettings.Set(key, value);
+            return Ok();
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpPost("settings/reset")]

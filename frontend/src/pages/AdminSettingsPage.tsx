@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { SlidersHorizontal, RotateCcw, Save, Info } from 'lucide-react';
 import { useAlgoSettings, useUpdateAlgoSetting, useResetAlgoSettings } from '../hooks/useApi';
+import type { WeightsConfig, TechnicalWeightsConfig, ThresholdsConfig, ScanConfig, FeatureFlagsConfig } from '../types';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -50,33 +51,44 @@ function Toggle({ label, description, value, onChange }: {
 }
 
 export default function AdminSettingsPage() {
-  const { data: settings = {}, isLoading } = useAlgoSettings();
+  const { data: settings, isLoading } = useAlgoSettings();
   const updateSetting = useUpdateAlgoSetting();
   const resetSettings = useResetAlgoSettings();
 
-  const [weights, setWeights] = useState({ technical: 0.35, ml: 0.25, sentiment: 0.15, claude: 0.25 });
-  const [techWeights, setTechWeights] = useState({ trend: 3, momentum: 2, volatility: 1, volume: 2 });
-  const [thresholds, setThresholds] = useState({ bull: 0.35, bear: -0.35 });
-  const [scan, setScan] = useState({ intervalMinutes: 15, cooldownMinutes: 60, candleHistory: 100, timeframe: 'D' });
-  const [features, setFeatures] = useState({ enableMl: true, enableClaude: true, enableSentiment: true, enableNewsFetcher: true });
+  const [weights, setWeights] = useState<WeightsConfig>({ technical: 0.35, ml: 0.25, sentiment: 0.15, claude: 0.25 });
+  const [techWeights, setTechWeights] = useState<TechnicalWeightsConfig>({ trend: 3, momentum: 2, volatility: 1, volume: 2 });
+  const [thresholds, setThresholds] = useState<ThresholdsConfig>({ bull: 0.35, bear: -0.35 });
+  const [scan, setScan] = useState<ScanConfig>({ intervalMinutes: 15, cooldownMinutes: 60, candleHistory: 100, timeframe: 'D' });
+  const [features, setFeatures] = useState<FeatureFlagsConfig>({ enableMl: true, enableClaude: true, enableSentiment: true, enableNewsFetcher: true });
   const [saved, setSaved] = useState<string | null>(null);
+  // Fix 5: error state voor validatiefouten
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!settings || Object.keys(settings).length === 0) return;
-    if (settings.weights) setWeights(settings.weights as any);
-    if (settings.technical_weights) setTechWeights(settings.technical_weights as any);
-    if (settings.thresholds) setThresholds(settings.thresholds as any);
-    if (settings.scan) setScan(settings.scan as any);
-    if (settings.features) setFeatures(settings.features as any);
+    if (settings.weights) setWeights(settings.weights);
+    if (settings.technical_weights) setTechWeights(settings.technical_weights);
+    if (settings.thresholds) setThresholds(settings.thresholds);
+    if (settings.scan) setScan(settings.scan);
+    if (settings.features) setFeatures(settings.features);
   }, [settings]);
 
   const weightsSum = Math.round((weights.technical + weights.ml + weights.sentiment + weights.claude) * 100);
   const weightsValid = weightsSum === 100;
 
+  // Fix 5: foutmelding tonen bij validatiefout vanuit backend
   async function saveKey(key: string, value: unknown) {
-    await updateSetting.mutateAsync({ key, value });
-    setSaved(key);
-    setTimeout(() => setSaved(null), 2000);
+    try {
+      setError(null);
+      await updateSetting.mutateAsync({ key, value });
+      setSaved(key);
+      setTimeout(() => setSaved(null), 2000);
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } }; message?: string };
+      const message = e?.response?.data?.error ?? e?.message ?? 'Opslaan mislukt';
+      setError(message);
+      setTimeout(() => setError(null), 5000);
+    }
   }
 
   if (isLoading) return <div className="p-6 text-gray-500">Laden...</div>;
@@ -96,6 +108,13 @@ export default function AdminSettingsPage() {
           <RotateCcw className="w-4 h-4" /> Reset naar standaard
         </button>
       </div>
+
+      {/* Fix 5: error banner */}
+      {error && (
+        <div className="bg-red-900/50 border border-red-700 text-red-300 px-4 py-3 rounded-lg text-sm">
+          {error}
+        </div>
+      )}
 
       {/* Weights */}
       <Section title="Algoritme Gewichten">
@@ -136,7 +155,7 @@ export default function AdminSettingsPage() {
           {([['trend', 'Trend', 'Bepaalt het gewicht van trendvolgende signalen (EMA, MACD)'],
             ['momentum', 'Momentum', 'RSI en stochastische oscillator signalen'],
             ['volatility', 'Volatiliteit', 'ATR en Bollinger Band signalen'],
-            ['volume', 'Volume', 'OBV en volumebevestiging signalen']] as [keyof typeof techWeights, string, string][]).map(([key, label, desc]) => (
+            ['volume', 'Volume', 'OBV en volumebevestiging signalen']] as [keyof TechnicalWeightsConfig, string, string][]).map(([key, label, desc]) => (
             <div key={key}>
               <Slider
                 label={label}

@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
-import type { ApiResponse, PaginatedResponse, DashboardData, Signal, WatchlistItem, PortfolioItem, NewsArticle, SectorSentiment, TrendingSymbol } from '../types';
+import type { ApiResponse, PaginatedResponse, DashboardData, Signal, WatchlistItem, PortfolioItem, NewsArticle, SectorSentiment, TrendingSymbol, AlgoSettingsResponse } from '../types';
 
 // Dashboard
 export function useDashboard() {
@@ -170,7 +170,7 @@ export function useTestProvider() {
 export function useAlgoSettings() {
   return useQuery({
     queryKey: ['algo-settings'],
-    queryFn: () => api.get<Record<string, unknown>>('/v1/admin/settings'),
+    queryFn: () => api.get<AlgoSettingsResponse>('/v1/admin/settings'),
   });
 }
 

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -20,6 +19,12 @@ public class AlgoSettingsService
 {
     private readonly AppDbContext _db;
     private readonly ILogger<AlgoSettingsService> _logger;
+
+    // Fix 2: één gedeelde instantie in plaats van per-aanroep aanmaken
+    private static readonly JsonSerializerOptions _jsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
 
     private static readonly Dictionary<string, string> Defaults = new()
     {
@@ -56,9 +61,36 @@ public class AlgoSettingsService
         catch { return null; }
     }
 
+    // Fix 1: validatie voor weights en thresholds
     public async Task Set(string key, JsonElement value)
     {
         var json = value.GetRawText();
+
+        if (key == "weights")
+        {
+            var weights = JsonSerializer.Deserialize<WeightsConfig>(json, _jsonOptions);
+            if (weights != null)
+            {
+                var sum = weights.Technical + weights.Ml + weights.Sentiment + weights.Claude;
+                if (Math.Abs(sum - 1.0) > 0.01)
+                    throw new ArgumentException($"Weights moeten optellen tot 1.0, huidige som: {sum:F2}");
+                if (weights.Technical < 0 || weights.Ml < 0 || weights.Sentiment < 0 || weights.Claude < 0)
+                    throw new ArgumentException("Weights mogen niet negatief zijn");
+            }
+        }
+
+        if (key == "thresholds")
+        {
+            var thresholds = JsonSerializer.Deserialize<ThresholdsConfig>(json, _jsonOptions);
+            if (thresholds != null)
+            {
+                if (thresholds.Bull <= 0 || thresholds.Bull > 1)
+                    throw new ArgumentException("Bull drempel moet tussen 0 en 1 liggen");
+                if (thresholds.Bear >= 0 || thresholds.Bear < -1)
+                    throw new ArgumentException("Bear drempel moet tussen -1 en 0 liggen");
+            }
+        }
+
         var existing = await _db.AlgoSettings.FirstOrDefaultAsync(s => s.Key == key);
         if (existing != null)
         {
@@ -92,38 +124,39 @@ public class AlgoSettingsService
         _logger.LogInformation("Reset all algo settings to defaults");
     }
 
+    // Fix 2: gebruik _jsonOptions in alle typed getters
     public async Task<WeightsConfig> GetWeights()
     {
         var el = await Get("weights");
         if (el == null) return new WeightsConfig();
-        return JsonSerializer.Deserialize<WeightsConfig>(el.Value.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new WeightsConfig();
+        return JsonSerializer.Deserialize<WeightsConfig>(el.Value.GetRawText(), _jsonOptions) ?? new WeightsConfig();
     }
 
     public async Task<ThresholdsConfig> GetThresholds()
     {
         var el = await Get("thresholds");
         if (el == null) return new ThresholdsConfig();
-        return JsonSerializer.Deserialize<ThresholdsConfig>(el.Value.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new ThresholdsConfig();
+        return JsonSerializer.Deserialize<ThresholdsConfig>(el.Value.GetRawText(), _jsonOptions) ?? new ThresholdsConfig();
     }
 
     public async Task<TechnicalWeightsConfig> GetTechnicalWeights()
     {
         var el = await Get("technical_weights");
         if (el == null) return new TechnicalWeightsConfig();
-        return JsonSerializer.Deserialize<TechnicalWeightsConfig>(el.Value.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new TechnicalWeightsConfig();
+        return JsonSerializer.Deserialize<TechnicalWeightsConfig>(el.Value.GetRawText(), _jsonOptions) ?? new TechnicalWeightsConfig();
     }
 
     public async Task<ScanConfig> GetScanConfig()
     {
         var el = await Get("scan");
         if (el == null) return new ScanConfig();
-        return JsonSerializer.Deserialize<ScanConfig>(el.Value.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new ScanConfig();
+        return JsonSerializer.Deserialize<ScanConfig>(el.Value.GetRawText(), _jsonOptions) ?? new ScanConfig();
     }
 
     public async Task<FeatureFlagsConfig> GetFeatureFlags()
     {
         var el = await Get("features");
         if (el == null) return new FeatureFlagsConfig();
-        return JsonSerializer.Deserialize<FeatureFlagsConfig>(el.Value.GetRawText(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new FeatureFlagsConfig();
+        return JsonSerializer.Deserialize<FeatureFlagsConfig>(el.Value.GetRawText(), _jsonOptions) ?? new FeatureFlagsConfig();
     }
 }
