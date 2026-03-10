@@ -1,0 +1,105 @@
+version: '3.8'
+
+services:
+  # ── NGINX REVERSE PROXY ──
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      api:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+    restart: unless-stopped
+
+  # ── REACT FRONTEND ──
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    expose:
+      - "3000"
+    environment:
+      - VITE_API_URL=/api
+    restart: unless-stopped
+
+  # ── .NET WEB API ──
+  api:
+    build:
+      context: ./src
+      dockerfile: AxonStockAgent.Api/Dockerfile
+    expose:
+      - "5000"
+    environment:
+      - ASPNETCORE_URLS=http://+:5000
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=axonstockagent;Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
+      - Screener__FinnhubApiKey=${FINNHUB_API_KEY:-}
+      - Screener__ClaudeApiKey=${CLAUDE_API_KEY:-}
+      - Screener__TelegramBotToken=${TELEGRAM_BOT_TOKEN:-}
+      - Screener__TelegramChatId=${TELEGRAM_CHAT_ID:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  # ── BACKGROUND WORKER ──
+  worker:
+    build:
+      context: ./src
+      dockerfile: AxonStockAgent.Worker/Dockerfile
+    environment:
+      - ConnectionStrings__DefaultConnection=Host=db;Port=5432;Database=axonstockagent;Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
+      - Screener__FinnhubApiKey=${FINNHUB_API_KEY:-}
+      - Screener__ClaudeApiKey=${CLAUDE_API_KEY:-}
+      - Screener__TelegramBotToken=${TELEGRAM_BOT_TOKEN:-}
+      - Screener__TelegramChatId=${TELEGRAM_CHAT_ID:-}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  # ── POSTGRESQL DATABASE ──
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: axonstockagent
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # ── REDIS (caching + rate limiting) ──
+  redis:
+    image: redis:7-alpine
+    expose:
+      - "6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

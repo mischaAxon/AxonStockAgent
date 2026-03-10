@@ -1,0 +1,44 @@
+# Development overrides — hot reload, exposed ports, bind mounts
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:5000/api
+
+  api:
+    build:
+      context: ./src
+      dockerfile: AxonStockAgent.Api/Dockerfile.dev
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./src:/app/src
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+
+  worker:
+    build:
+      context: ./src
+      dockerfile: AxonStockAgent.Worker/Dockerfile.dev
+    volumes:
+      - ./src:/app/src
+
+  db:
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"

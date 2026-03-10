@@ -1,0 +1,11 @@
+FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine
+WORKDIR /app/src
+
+COPY AxonStockAgent.Core/AxonStockAgent.Core.csproj AxonStockAgent.Core/
+COPY AxonStockAgent.Api/AxonStockAgent.Api.csproj AxonStockAgent.Api/
+RUN dotnet restore AxonStockAgent.Api/AxonStockAgent.Api.csproj
+
+COPY . .
+
+WORKDIR /app/src/AxonStockAgent.Api
+CMD ["dotnet", "watch", "run", "--urls", "http://+:5000"]
