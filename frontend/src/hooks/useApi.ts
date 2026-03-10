@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
-import type { ApiResponse, PaginatedResponse, DashboardData, Signal, WatchlistItem, PortfolioItem } from '../types';
+import type { ApiResponse, PaginatedResponse, DashboardData, Signal, WatchlistItem, PortfolioItem, NewsArticle, SectorSentiment, TrendingSymbol } from '../types';
 
 // Dashboard
 export function useDashboard() {
@@ -87,6 +87,39 @@ export function useEnrichWatchlist() {
       queryClient.invalidateQueries({ queryKey: ['watchlist'] });
       queryClient.invalidateQueries({ queryKey: ['sectors'] });
     },
+  });
+}
+
+// News
+export function useLatestNews(limit = 20) {
+  return useQuery({
+    queryKey: ['news', 'latest', limit],
+    queryFn: () => api.get<NewsArticle[]>(`/v1/news/latest?limit=${limit}`),
+    refetchInterval: 60_000,
+  });
+}
+
+export function useNewsBySymbol(symbol: string) {
+  return useQuery({
+    queryKey: ['news', 'symbol', symbol],
+    queryFn: () => api.get<NewsArticle[]>(`/v1/news/symbol/${symbol}`),
+    enabled: !!symbol,
+  });
+}
+
+export function useSectorSentiment() {
+  return useQuery({
+    queryKey: ['news', 'sector-sentiment'],
+    queryFn: () => api.get<SectorSentiment[]>('/v1/news/sector-sentiment'),
+    refetchInterval: 60_000,
+  });
+}
+
+export function useTrending() {
+  return useQuery({
+    queryKey: ['news', 'trending'],
+    queryFn: () => api.get<TrendingSymbol[]>('/v1/news/trending'),
+    refetchInterval: 60_000,
   });
 }
 

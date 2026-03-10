@@ -1,4 +1,5 @@
 using System.Text;
+using AxonStockAgent.Api.BackgroundServices;
 using AxonStockAgent.Api.Data;
 using AxonStockAgent.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -62,6 +63,8 @@ builder.Services.AddScoped<JwtService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<ProviderManager>();
 builder.Services.AddScoped<SectorService>();
+builder.Services.AddScoped<NewsService>();
+builder.Services.AddHostedService<NewsFetcherService>();
 
 var app = builder.Build();
 

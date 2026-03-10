@@ -70,3 +70,29 @@ export interface PaginatedResponse<T> {
   data: T[];
   meta: { page: number; limit: number; total: number };
 }
+
+export interface NewsArticle {
+  id: number;
+  source: string;
+  headline: string;
+  summary?: string;
+  url?: string;
+  symbol?: string;
+  sector?: string;
+  sentimentScore: number;
+  publishedAt: string;
+  fetchedAt: string;
+}
+
+export interface SectorSentiment {
+  sector: string;
+  avgSentiment: number;
+  articleCount: number;
+  calculatedAt: string;
+}
+
+export interface TrendingSymbol {
+  symbol: string;
+  articleCount: number;
+  avgSentiment: number;
+}
