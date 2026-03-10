@@ -1,3 +1,5 @@
+import { getAccessToken } from './auth';
+
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 class ApiClient {
@@ -8,10 +10,14 @@ class ApiClient {
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const token = await getAccessToken();
+    const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
+
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
+        ...authHeader,
         ...options.headers,
       },
     });
@@ -30,6 +36,13 @@ class ApiClient {
   post<T>(endpoint: string, data: unknown) {
     return this.request<T>(endpoint, {
       method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  put<T>(endpoint: string, data: unknown) {
+    return this.request<T>(endpoint, {
+      method: 'PUT',
       body: JSON.stringify(data),
     });
   }

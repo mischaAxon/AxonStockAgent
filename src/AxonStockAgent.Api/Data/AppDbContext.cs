@@ -11,6 +11,8 @@ public class AppDbContext : DbContext
     public DbSet<SignalEntity> Signals => Set<SignalEntity>();
     public DbSet<PortfolioItem> Portfolio => Set<PortfolioItem>();
     public DbSet<DividendEntity> Dividends => Set<DividendEntity>();
+    public DbSet<UserEntity> Users => Set<UserEntity>();
+    public DbSet<RefreshTokenEntity> RefreshTokens => Set<RefreshTokenEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -45,6 +47,27 @@ public class AppDbContext : DbContext
             e.ToTable("dividends");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.Symbol, x.ExDate }).IsUnique();
+        });
+
+        modelBuilder.Entity<UserEntity>(e =>
+        {
+            e.ToTable("users");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.Email).IsUnique();
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+        });
+
+        modelBuilder.Entity<RefreshTokenEntity>(e =>
+        {
+            e.ToTable("refresh_tokens");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.Token);
+            e.HasIndex(x => x.UserId);
+            e.HasOne(x => x.User)
+             .WithMany()
+             .HasForeignKey(x => x.UserId)
+             .OnDelete(DeleteBehavior.Cascade);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
         });
     }
 }

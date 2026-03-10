@@ -1,10 +1,12 @@
 using AxonStockAgent.Api.Data;
 using AxonStockAgent.Api.Data.Entities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace AxonStockAgent.Api.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/v1/[controller]")]
 public class PortfolioController : ControllerBase

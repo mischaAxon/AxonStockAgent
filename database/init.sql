@@ -99,6 +99,31 @@ CREATE TABLE IF NOT EXISTS audit_log (
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Users: authenticatie en autorisatie
+CREATE TABLE IF NOT EXISTS users (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email           VARCHAR(200) NOT NULL UNIQUE,
+    password_hash   TEXT NOT NULL,
+    display_name    VARCHAR(100),
+    role            VARCHAR(20) NOT NULL DEFAULT 'user',
+    is_active       BOOLEAN DEFAULT true,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    last_login_at   TIMESTAMPTZ
+);
+
+-- Refresh tokens
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token           TEXT NOT NULL,
+    expires_at      TIMESTAMPTZ NOT NULL,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    is_revoked      BOOLEAN DEFAULT false
+);
+
+CREATE INDEX idx_refresh_tokens_token ON refresh_tokens(token);
+CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
+
 -- Seed default watchlist
 INSERT INTO watchlist (symbol, exchange, name) VALUES
     ('ASML.AS',  'Euronext AMS', 'ASML Holding'),

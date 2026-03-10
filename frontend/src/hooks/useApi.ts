@@ -70,3 +70,20 @@ export function useUpsertPortfolio() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['portfolio'] }),
   });
 }
+
+// Admin
+export function useAdminUsers() {
+  return useQuery({
+    queryKey: ['admin', 'users'],
+    queryFn: () => api.get<ApiResponse<unknown[]>>('/v1/admin/users'),
+  });
+}
+
+export function useUpdateUser() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: string; role?: string; isActive?: boolean }) =>
+      api.put(`/v1/admin/users/${id}`, data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'users'] }),
+  });
+}
