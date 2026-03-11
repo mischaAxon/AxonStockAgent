@@ -155,8 +155,9 @@ public class ScreenerWorker : BackgroundService
         var notifySell = await algoSettings.GetBoolAsync("notifications", "notify_sell", true);
         var notifySqueeze = await algoSettings.GetBoolAsync("notifications", "notify_squeeze", true);
 
-        // Haal het dedup-window op (standaard 60 minuten)
+        // Haal scan-gedrag instellingen op
         var dedupWindowMinutes = (int)await algoSettings.GetDecimalAsync("scan", "signal_dedup_minutes", 60m);
+        var normalizeMissingSources = await algoSettings.GetBoolAsync("scan", "normalize_missing_sources", true);
 
         // ── 3. Init services ──
         var marketProvider = await providers.GetMarketDataProvider();
@@ -192,7 +193,7 @@ public class ScreenerWorker : BackgroundService
                     symbol, marketProvider, newsProviders, claudeService,
                     techWeight, mlWeight, sentimentWeight, claudeWeight, fundamentalWeight,
                     buyThreshold, sellThreshold, squeezeThreshold,
-                    lookbackDays, minVolume, ct);
+                    lookbackDays, minVolume, normalizeMissingSources, ct);
 
                 if (signal != null)
                 {
@@ -242,7 +243,7 @@ public class ScreenerWorker : BackgroundService
         double techWeight, double mlWeight, double sentimentWeight,
         double claudeWeight, double fundamentalWeight,
         double buyThreshold, double sellThreshold, double squeezeThreshold,
-        int lookbackDays, long minVolume,
+        int lookbackDays, long minVolume, bool normalizeMissingSources,
         CancellationToken ct)
     {
         // ── Fetch candles ──
@@ -294,21 +295,57 @@ public class ScreenerWorker : BackgroundService
         float? mlProbability = null;
 
         // ── Gewogen eindscore berekenen ──
-        var techNorm = (techScore + 1) / 2;
-        var sentNorm = (sentimentScore + 1) / 2;
+        var techNorm   = (techScore + 1) / 2;
+        var sentNorm   = (sentimentScore + 1) / 2;
         var claudeNorm = claude?.Confidence ?? 0.5;
         if (claude?.Direction == "SELL") claudeNorm = 1 - claudeNorm;
+        var mlNorm   = mlProbability.HasValue ? (double)mlProbability.Value : 0.5;
         var fundNorm = 0.5;
 
-        double totalWeight = techWeight;
-        double weightedSum = techNorm * techWeight;
+        var sentPresent   = sentimentScore != 0;
+        var claudePresent = claude != null;
+        var mlPresent     = mlProbability.HasValue;
 
-        if (mlProbability.HasValue)  { totalWeight += mlWeight;          weightedSum += (mlProbability.Value) * mlWeight; }
-        if (sentimentScore != 0)     { totalWeight += sentimentWeight;   weightedSum += sentNorm * sentimentWeight; }
-        if (claude != null)          { totalWeight += claudeWeight;      weightedSum += claudeNorm * claudeWeight; }
-        totalWeight += fundamentalWeight; weightedSum += fundNorm * fundamentalWeight;
+        double finalScore;
+        if (normalizeMissingSources)
+        {
+            // Normalize mode: ontbrekende bronnen → 0.5 (neutraal), gewichten tellen altijd mee.
+            // Scores zijn zo vergelijkbaar over symbolen ongeacht welke bronnen beschikbaar zijn.
+            var sentNormEff   = sentPresent   ? sentNorm   : 0.5;
+            var claudeNormEff = claudePresent ? claudeNorm : 0.5;
+            var mlNormEff     = mlPresent     ? mlNorm     : 0.5;
 
-        var finalScore = totalWeight > 0 ? weightedSum / totalWeight : 0.5;
+            finalScore = techNorm      * techWeight
+                       + mlNormEff     * mlWeight
+                       + sentNormEff   * sentimentWeight
+                       + claudeNormEff * claudeWeight
+                       + fundNorm      * fundamentalWeight;
+            // gewichten tellen op tot 1.0 → geen deling nodig
+        }
+        else
+        {
+            // Legacy mode: alleen aanwezige bronnen tellen mee (inconsistente denominatoren per symbool)
+            double totalWeight = techWeight;
+            double weightedSum = techNorm * techWeight;
+
+            if (mlPresent)     { totalWeight += mlWeight;        weightedSum += mlNorm   * mlWeight; }
+            if (sentPresent)   { totalWeight += sentimentWeight; weightedSum += sentNorm * sentimentWeight; }
+            if (claudePresent) { totalWeight += claudeWeight;    weightedSum += claudeNorm * claudeWeight; }
+            totalWeight += fundamentalWeight; weightedSum += fundNorm * fundamentalWeight;
+
+            finalScore = totalWeight > 0 ? weightedSum / totalWeight : 0.5;
+        }
+
+        _logger.LogDebug(
+            "{Symbol} score breakdown: tech={Tech:F3}, sent={Sent:F3}({SentP}), claude={Claude:F3}({ClaudeP}), ml={Ml:F3}({MlP}), fund={Fund:F3} → final={Final:F3} [{Mode}]",
+            symbol,
+            techNorm,
+            sentPresent   ? sentNorm   : 0.5, sentPresent   ? "aanwezig" : "neutraal",
+            claudePresent ? claudeNorm : 0.5, claudePresent ? "aanwezig" : "neutraal",
+            mlPresent     ? mlNorm     : 0.5, mlPresent     ? "aanwezig" : "neutraal",
+            fundNorm,
+            finalScore,
+            normalizeMissingSources ? "normalize" : "legacy");
 
         // ── Verdict bepalen ──
         string verdict;
