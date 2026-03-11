@@ -38,6 +38,7 @@ public class DashboardController : ControllerBase
             .Take(5)
             .Select(s => new
             {
+                s.Id,
                 s.Symbol,
                 s.FinalVerdict,
                 s.FinalScore,
