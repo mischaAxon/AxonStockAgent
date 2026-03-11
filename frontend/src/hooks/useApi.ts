@@ -65,9 +65,23 @@ export function usePortfolio() {
 export function useUpsertPortfolio() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { symbol: string; shares: number; avgBuyPrice?: number }) =>
+    mutationFn: (data: { symbol: string; shares: number; avgBuyPrice?: number; notes?: string }) =>
       api.post('/v1/portfolio', data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['portfolio'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['portfolio'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+}
+
+export function useDeletePortfolio() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (symbol: string) => api.delete(`/v1/portfolio/${symbol}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['portfolio'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
   });
 }
 

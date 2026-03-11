@@ -42,6 +42,7 @@ export interface PortfolioItem {
   avgBuyPrice: number | null;
   notes: string | null;
   addedAt: string;
+  updatedAt: string;
 }
 
 export interface DashboardData {
