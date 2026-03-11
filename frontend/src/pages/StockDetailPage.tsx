@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, RefreshCw, ExternalLink } from 'lucide-react';
-import { useFundamentals, useInsiderTransactions, useWatchlist } from '../hooks/useApi';
-import type { CompanyFundamentals, InsiderTransaction } from '../types';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { useFundamentals, useInsiderTransactions, useWatchlist, useSignals, useNewsBySymbol } from '../hooks/useApi';
+import type { CompanyFundamentals, InsiderTransaction, Signal, NewsArticle } from '../types';
+import { relativeTime } from '../utils/formatTime';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -95,6 +97,53 @@ function Skeleton() {
       </div>
     </div>
   );
+}
+
+function VerdictBadge({ verdict }: { verdict: string }) {
+  const styles: Record<string, string> = {
+    BUY:     'bg-green-500/20 text-green-400',
+    SELL:    'bg-red-500/20 text-red-400',
+    SQUEEZE: 'bg-amber-500/20 text-amber-400',
+  };
+  return (
+    <span className={`px-2 py-0.5 rounded text-xs font-bold ${styles[verdict] ?? 'bg-gray-700 text-gray-300'}`}>
+      {verdict}
+    </span>
+  );
+}
+
+function ScoreBar({ score }: { score: number }) {
+  const pct = Math.round(score * 100);
+  const color = score >= 0.6 ? 'bg-green-500' : score >= 0.3 ? 'bg-amber-500' : 'bg-red-500';
+  return (
+    <div className="flex items-center gap-2">
+      <div className="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="font-mono text-xs text-gray-300">{pct}%</span>
+    </div>
+  );
+}
+
+function ChartTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: { date: string; score: number; verdict: string } }> }) {
+  if (!active || !payload?.[0]) return null;
+  const d = payload[0].payload;
+  return (
+    <div className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-xs">
+      <p className="text-gray-400">{d.date}</p>
+      <p className="text-white font-semibold">{(d.score * 100).toFixed(1)}%</p>
+      <p className={d.verdict === 'BUY' ? 'text-green-400' : d.verdict === 'SELL' ? 'text-red-400' : 'text-amber-400'}>
+        {d.verdict}
+      </p>
+    </div>
+  );
+}
+
+function ChartDot(props: { cx?: number; cy?: number; payload?: { verdict: string } }) {
+  const { cx, cy, payload } = props;
+  if (cx == null || cy == null || !payload) return null;
+  const color = payload.verdict === 'BUY' ? '#22c55e' : payload.verdict === 'SELL' ? '#ef4444' : '#f59e0b';
+  return <circle cx={cx} cy={cy} r={4} fill={color} stroke="none" />;
 }
 
 function AnalystBar({ data }: { data: CompanyFundamentals }) {
@@ -210,10 +259,29 @@ export default function StockDetailPage() {
   const { data: watchlistData }   = useWatchlist();
   const { data: fundData, isLoading: fundLoading, error: fundError, refetch } = useFundamentals(upperSymbol);
   const { data: insidersData, isLoading: insidersLoading } = useInsiderTransactions(upperSymbol);
+  const { data: signalsData,  isLoading: signalsLoading }  = useSignals(1, 10, upperSymbol);
+  const { data: newsData }        = useNewsBySymbol(upperSymbol);
 
   const watchlistItem = watchlistData?.data?.find(w => w.symbol === upperSymbol);
   const fund: CompanyFundamentals | undefined = fundData?.data;
   const insiders: InsiderTransaction[] = insidersData?.data ?? [];
+  const signals: Signal[]   = signalsData?.data ?? [];
+  const news: NewsArticle[] = Array.isArray(newsData) ? newsData : [];
+
+  const latestSignal = signals[0];
+  const totalSignals = signalsData?.meta?.total ?? 0;
+  const avgScore = signals.length > 0
+    ? signals.reduce((acc, s) => acc + s.finalScore, 0) / signals.length
+    : null;
+
+  // Chart data: oldest first
+  const chartData = [...signals]
+    .reverse()
+    .map(s => ({
+      date: new Date(s.createdAt).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit' }),
+      score: s.finalScore,
+      verdict: s.finalVerdict,
+    }));
 
   return (
     <div className="space-y-6">
@@ -274,6 +342,218 @@ export default function StockDetailPage() {
         </div>
       </div>
 
+      {/* ── Quick Stats Banner ─────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {/* Latest signal */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <p className="text-xs text-gray-500 mb-1.5">Laatste Signaal</p>
+          {signalsLoading ? (
+            <div className="h-5 bg-gray-800 rounded animate-pulse w-16" />
+          ) : latestSignal ? (
+            <div>
+              <VerdictBadge verdict={latestSignal.finalVerdict} />
+              <p className="text-xs text-gray-500 mt-1">{relativeTime(latestSignal.createdAt)}</p>
+            </div>
+          ) : (
+            <p className="text-gray-600 text-sm">Geen signalen</p>
+          )}
+        </div>
+
+        {/* Score */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <p className="text-xs text-gray-500 mb-1.5">Score</p>
+          {signalsLoading ? (
+            <div className="h-5 bg-gray-800 rounded animate-pulse w-12" />
+          ) : latestSignal ? (
+            <p className={`text-xl font-bold font-mono ${
+              latestSignal.finalScore >= 0.6 ? 'text-green-400'
+              : latestSignal.finalScore >= 0.3 ? 'text-amber-400'
+              : 'text-red-400'
+            }`}>
+              {(latestSignal.finalScore * 100).toFixed(1)}%
+            </p>
+          ) : (
+            <p className="text-gray-600 text-xl font-bold">—</p>
+          )}
+        </div>
+
+        {/* Total signals */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <p className="text-xs text-gray-500 mb-1.5">Totaal Signalen</p>
+          {signalsLoading ? (
+            <div className="h-5 bg-gray-800 rounded animate-pulse w-8" />
+          ) : (
+            <p className="text-xl font-bold text-white">{totalSignals}</p>
+          )}
+        </div>
+
+        {/* Average score */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <p className="text-xs text-gray-500 mb-1.5">Gemiddelde Score</p>
+          {signalsLoading ? (
+            <div className="h-5 bg-gray-800 rounded animate-pulse w-12" />
+          ) : avgScore != null ? (
+            <p className={`text-xl font-bold font-mono ${
+              avgScore >= 0.6 ? 'text-green-400' : avgScore >= 0.3 ? 'text-amber-400' : 'text-red-400'
+            }`}>
+              {(avgScore * 100).toFixed(1)}%
+            </p>
+          ) : (
+            <p className="text-gray-600 text-xl font-bold">—</p>
+          )}
+        </div>
+      </div>
+
+      {/* ── Score Trend Chart ──────────────────────────────────────────────── */}
+      <section>
+        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Score Trend</h2>
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          {signalsLoading ? (
+            <div className="h-[200px] bg-gray-800 rounded animate-pulse" />
+          ) : chartData.length < 2 ? (
+            <p className="text-gray-500 text-sm py-8 text-center">
+              Niet genoeg data voor een trend chart.
+            </p>
+          ) : (
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 10, fill: '#6b7280' }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  domain={[0, 1]}
+                  tickFormatter={(v: number) => `${Math.round(v * 100)}%`}
+                  tick={{ fontSize: 10, fill: '#6b7280' }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={36}
+                />
+                <Tooltip content={<ChartTooltip />} />
+                <ReferenceLine y={0.65} stroke="#22c55e" strokeDasharray="4 3" strokeOpacity={0.5} />
+                <ReferenceLine y={0.35} stroke="#ef4444" strokeDasharray="4 3" strokeOpacity={0.5} />
+                <Line
+                  type="monotone"
+                  dataKey="score"
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  dot={<ChartDot />}
+                  activeDot={{ r: 5, fill: '#3b82f6' }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </section>
+
+      {/* ── Signaalhistorie ───────────────────────────────────────────────── */}
+      <section>
+        <div className="flex items-center gap-2 mb-3">
+          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Signaalhistorie</h2>
+          {totalSignals > 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-gray-800 text-gray-400 text-xs">{totalSignals}</span>
+          )}
+        </div>
+
+        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+          {signalsLoading ? (
+            <div className="p-4 animate-pulse space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="h-8 bg-gray-800 rounded" />
+              ))}
+            </div>
+          ) : signals.length === 0 ? (
+            <p className="text-gray-500 text-sm p-4">Nog geen signalen voor {upperSymbol}.</p>
+          ) : (
+            <>
+              <table className="w-full text-sm">
+                <thead className="bg-gray-800/50">
+                  <tr>
+                    <th className="px-4 py-2.5 text-left text-xs text-gray-400 font-medium">Datum</th>
+                    <th className="px-4 py-2.5 text-left text-xs text-gray-400 font-medium">Verdict</th>
+                    <th className="px-4 py-2.5 text-left text-xs text-gray-400 font-medium w-36">Score</th>
+                    <th className="px-4 py-2.5 text-right text-xs text-gray-400 font-medium">Prijs</th>
+                    <th className="px-4 py-2.5 text-left text-xs text-gray-400 font-medium hidden md:table-cell">Claude</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-800">
+                  {signals.map((s) => (
+                    <tr key={s.id} className="hover:bg-gray-800/30">
+                      <td className="px-4 py-2.5 text-gray-400 whitespace-nowrap text-xs">{relativeTime(s.createdAt)}</td>
+                      <td className="px-4 py-2.5"><VerdictBadge verdict={s.finalVerdict} /></td>
+                      <td className="px-4 py-2.5"><ScoreBar score={s.finalScore} /></td>
+                      <td className="px-4 py-2.5 text-right font-mono text-white text-xs">€{s.priceAtSignal.toFixed(2)}</td>
+                      <td className="px-4 py-2.5 text-gray-500 text-xs hidden md:table-cell max-w-xs truncate">
+                        {s.claudeReasoning
+                          ? s.claudeReasoning.slice(0, 60) + (s.claudeReasoning.length > 60 ? '…' : '')
+                          : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {totalSignals > 10 && (
+                <div className="px-4 py-2.5 border-t border-gray-800">
+                  <Link
+                    to={`/signals?symbol=${upperSymbol}`}
+                    className="text-xs text-axon-400 hover:text-axon-300 transition-colors"
+                  >
+                    Bekijk alle signalen →
+                  </Link>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </section>
+
+      {/* ── Recent Nieuws ─────────────────────────────────────────────────── */}
+      <section>
+        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Recent Nieuws</h2>
+        <div className="bg-gray-900 border border-gray-800 rounded-xl divide-y divide-gray-800">
+          {news.length === 0 ? (
+            <p className="text-gray-500 text-sm p-4">Geen recent nieuws voor {upperSymbol}.</p>
+          ) : (
+            news.slice(0, 5).map((article) => {
+              const sentDot = article.sentimentScore > 0.1
+                ? 'bg-green-400'
+                : article.sentimentScore < -0.1
+                  ? 'bg-red-400'
+                  : 'bg-gray-500';
+
+              return (
+                <div key={article.id} className="px-4 py-3 flex items-start gap-3">
+                  <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${sentDot}`} />
+                  <div className="min-w-0">
+                    {article.url ? (
+                      <a
+                        href={article.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-white hover:text-axon-300 transition-colors line-clamp-2"
+                      >
+                        {article.headline}
+                      </a>
+                    ) : (
+                      <p className="text-sm text-white line-clamp-2">{article.headline}</p>
+                    )}
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-gray-500">{article.source}</span>
+                      <span className="text-gray-700">·</span>
+                      <span className="text-xs text-gray-500">{relativeTime(article.publishedAt)}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </section>
+
+      {/* ── Fundamentals ─────────────────────────────────────────────────── */}
       {fundLoading ? (
         <Skeleton />
       ) : fundError || !fund ? (
@@ -299,12 +579,12 @@ export default function StockDetailPage() {
           <section>
             <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Winstgevendheid & Groei</h2>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <MetricCard label="Nettomarge"      value={fmtPct(fund.profitMargin)}      color={pctColor(fund.profitMargin)} />
-              <MetricCard label="Operationele marge" value={fmtPct(fund.operatingMargin)} color={pctColor(fund.operatingMargin)} />
-              <MetricCard label="ROE"             value={fmtPct(fund.returnOnEquity)}    color={pctColor(fund.returnOnEquity)} />
-              <MetricCard label="ROA"             value={fmtPct(fund.returnOnAssets)}    color={pctColor(fund.returnOnAssets)} />
-              <MetricCard label="Omzetgroei (YoY)" value={fmtPct(fund.revenueGrowthYoy)} color={pctColor(fund.revenueGrowthYoy)} />
-              <MetricCard label="Winstgroei (YoY)" value={fmtPct(fund.earningsGrowthYoy)} color={pctColor(fund.earningsGrowthYoy)} />
+              <MetricCard label="Nettomarge"         value={fmtPct(fund.profitMargin)}      color={pctColor(fund.profitMargin)} />
+              <MetricCard label="Operationele marge" value={fmtPct(fund.operatingMargin)}   color={pctColor(fund.operatingMargin)} />
+              <MetricCard label="ROE"                value={fmtPct(fund.returnOnEquity)}    color={pctColor(fund.returnOnEquity)} />
+              <MetricCard label="ROA"                value={fmtPct(fund.returnOnAssets)}    color={pctColor(fund.returnOnAssets)} />
+              <MetricCard label="Omzetgroei (YoY)"   value={fmtPct(fund.revenueGrowthYoy)}  color={pctColor(fund.revenueGrowthYoy)} />
+              <MetricCard label="Winstgroei (YoY)"   value={fmtPct(fund.earningsGrowthYoy)} color={pctColor(fund.earningsGrowthYoy)} />
             </div>
           </section>
 
@@ -313,8 +593,8 @@ export default function StockDetailPage() {
             <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Balans</h2>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               <MetricCard label="Schuld/Eigen vermogen" value={fmt(fund.debtToEquity)} color={deColor(fund.debtToEquity)} />
-              <MetricCard label="Current Ratio"  value={fmt(fund.currentRatio)} color={ratioColor(fund.currentRatio)} />
-              <MetricCard label="Quick Ratio"    value={fmt(fund.quickRatio)}   color={ratioColor(fund.quickRatio)} />
+              <MetricCard label="Current Ratio"         value={fmt(fund.currentRatio)} color={ratioColor(fund.currentRatio)} />
+              <MetricCard label="Quick Ratio"           value={fmt(fund.quickRatio)}   color={ratioColor(fund.quickRatio)} />
             </div>
           </section>
 
@@ -334,7 +614,7 @@ export default function StockDetailPage() {
             <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Omvang</h2>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               <MetricCard label="Marktkapitalisatie" value={fmtLarge(fund.marketCap) !== '—' ? '$' + fmtLarge(fund.marketCap) : '—'} color="text-white" />
-              <MetricCard label="Omzet (TTM)"        value={fund.revenue  != null ? '$' + fmtLarge(fund.revenue)  : '—'} color="text-white" />
+              <MetricCard label="Omzet (TTM)"        value={fund.revenue   != null ? '$' + fmtLarge(fund.revenue)   : '—'} color="text-white" />
               <MetricCard label="Nettoresultaat"     value={fund.netIncome != null ? '$' + fmtLarge(fund.netIncome) : '—'} color={pctColor(fund.netIncome)} />
             </div>
           </section>
