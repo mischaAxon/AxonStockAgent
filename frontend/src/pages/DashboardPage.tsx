@@ -3,6 +3,7 @@ import { TrendingUp, TrendingDown, Zap, Eye, Briefcase, Activity } from 'lucide-
 import { useDashboard, useSectorSentiment, useTrending } from '../hooks/useApi';
 import type { Signal, SectorSentiment, TrendingSymbol } from '../types';
 import { relativeTime } from '../utils/formatTime';
+import { VerdictBadge, ScoreBar } from '../components/shared';
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -23,32 +24,6 @@ function StatCard({ icon, label, value, color }: {
     <div className={`rounded-xl border p-5 ${colors[color]}`}>
       <div className="flex items-center gap-2 mb-2 opacity-80">{icon}<span className="text-sm">{label}</span></div>
       <div className="text-3xl font-bold">{value}</div>
-    </div>
-  );
-}
-
-function VerdictBadge({ verdict }: { verdict: string }) {
-  const styles: Record<string, string> = {
-    BUY:     'bg-green-500/20 text-green-400',
-    SELL:    'bg-red-500/20 text-red-400',
-    SQUEEZE: 'bg-amber-500/20 text-amber-400',
-  };
-  return (
-    <span className={`px-2 py-1 rounded text-xs font-bold ${styles[verdict] ?? 'bg-gray-700 text-gray-300'}`}>
-      {verdict}
-    </span>
-  );
-}
-
-function ScoreBar({ score }: { score: number }) {
-  const pct = Math.round(score * 100);
-  const color = score >= 0.6 ? 'bg-green-500' : score >= 0.3 ? 'bg-amber-500' : 'bg-red-500';
-  return (
-    <div className="flex items-center gap-2 mt-1">
-      <div className="w-20 h-1 bg-gray-700 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
-      </div>
-      <span className="font-mono text-xs text-gray-500">{pct}%</span>
     </div>
   );
 }
@@ -171,7 +146,7 @@ export default function DashboardPage() {
                     <VerdictBadge verdict={signal.finalVerdict} />
                     <div>
                       <span className="font-mono font-semibold text-white">{signal.symbol}</span>
-                      <ScoreBar score={signal.finalScore} />
+                      <div className="mt-1"><ScoreBar score={signal.finalScore} width="w-20" /></div>
                     </div>
                   </div>
                   <div className="text-right">

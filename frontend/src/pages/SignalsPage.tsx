@@ -4,6 +4,7 @@ import { Search, Zap, ChevronDown, ChevronUp } from 'lucide-react';
 import { useSignals } from '../hooks/useApi';
 import type { Signal } from '../types';
 import { relativeTime } from '../utils/formatTime';
+import { VerdictBadge, ScoreBar } from '../components/shared';
 
 type VerdictFilter = '' | 'BUY' | 'SELL' | 'SQUEEZE';
 type Period = 'today' | 'week' | 'month' | 'all';
@@ -17,32 +18,6 @@ function sinceDate(period: Period): Date | null {
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
-
-function VerdictBadge({ verdict }: { verdict: string }) {
-  const styles: Record<string, string> = {
-    BUY:     'bg-green-500/20 text-green-400',
-    SELL:    'bg-red-500/20 text-red-400',
-    SQUEEZE: 'bg-amber-500/20 text-amber-400',
-  };
-  return (
-    <span className={`px-2 py-0.5 rounded text-xs font-bold ${styles[verdict] ?? 'bg-gray-700 text-gray-300'}`}>
-      {verdict}
-    </span>
-  );
-}
-
-function ScoreBar({ score }: { score: number }) {
-  const pct = Math.round(score * 100);
-  const color = score >= 0.6 ? 'bg-green-500' : score >= 0.3 ? 'bg-amber-500' : 'bg-red-500';
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
-      </div>
-      <span className="font-mono text-xs text-gray-300 w-8 text-right">{pct}%</span>
-    </div>
-  );
-}
 
 function BreakdownBar({ label, score }: { label: string; score: number | null }) {
   return (

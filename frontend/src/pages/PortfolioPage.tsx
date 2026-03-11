@@ -4,6 +4,7 @@ import { usePortfolio, useUpsertPortfolio, useDeletePortfolio, useLatestSignals 
 import { Plus, Trash2, Briefcase } from 'lucide-react';
 import type { PortfolioItem, Signal } from '../types';
 import { relativeTime } from '../utils/formatTime';
+import { VerdictBadge } from '../components/shared';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -19,19 +20,6 @@ const ALLOC_DOT_COLORS = [
   'bg-red-500', 'bg-cyan-500', 'bg-pink-500', 'bg-indigo-500',
   'bg-orange-500', 'bg-teal-500',
 ];
-
-function VerdictBadge({ verdict }: { verdict: string }) {
-  const styles: Record<string, string> = {
-    BUY:     'bg-green-500/20 text-green-400',
-    SELL:    'bg-red-500/20 text-red-400',
-    SQUEEZE: 'bg-amber-500/20 text-amber-400',
-  };
-  return (
-    <span className={`px-2 py-0.5 rounded text-xs font-bold ${styles[verdict] ?? 'bg-gray-700 text-gray-300'}`}>
-      {verdict}
-    </span>
-  );
-}
 
 // ─── main page ───────────────────────────────────────────────────────────────
 

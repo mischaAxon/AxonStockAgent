@@ -5,6 +5,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceL
 import { useFundamentals, useInsiderTransactions, useWatchlist, useSignals, useNewsBySymbol } from '../hooks/useApi';
 import type { CompanyFundamentals, InsiderTransaction, Signal, NewsArticle } from '../types';
 import { relativeTime } from '../utils/formatTime';
+import { VerdictBadge, ScoreBar } from '../components/shared';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -95,32 +96,6 @@ function Skeleton() {
           <div key={i} className="h-20 bg-gray-800 rounded-xl" />
         ))}
       </div>
-    </div>
-  );
-}
-
-function VerdictBadge({ verdict }: { verdict: string }) {
-  const styles: Record<string, string> = {
-    BUY:     'bg-green-500/20 text-green-400',
-    SELL:    'bg-red-500/20 text-red-400',
-    SQUEEZE: 'bg-amber-500/20 text-amber-400',
-  };
-  return (
-    <span className={`px-2 py-0.5 rounded text-xs font-bold ${styles[verdict] ?? 'bg-gray-700 text-gray-300'}`}>
-      {verdict}
-    </span>
-  );
-}
-
-function ScoreBar({ score }: { score: number }) {
-  const pct = Math.round(score * 100);
-  const color = score >= 0.6 ? 'bg-green-500' : score >= 0.3 ? 'bg-amber-500' : 'bg-red-500';
-  return (
-    <div className="flex items-center gap-2">
-      <div className="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
-      </div>
-      <span className="font-mono text-xs text-gray-300">{pct}%</span>
     </div>
   );
 }
@@ -483,7 +458,7 @@ export default function StockDetailPage() {
                     <tr key={s.id} className="hover:bg-gray-800/30">
                       <td className="px-4 py-2.5 text-gray-400 whitespace-nowrap text-xs">{relativeTime(s.createdAt)}</td>
                       <td className="px-4 py-2.5"><VerdictBadge verdict={s.finalVerdict} /></td>
-                      <td className="px-4 py-2.5"><ScoreBar score={s.finalScore} /></td>
+                      <td className="px-4 py-2.5"><ScoreBar score={s.finalScore} width="w-16" /></td>
                       <td className="px-4 py-2.5 text-right font-mono text-white text-xs">€{s.priceAtSignal.toFixed(2)}</td>
                       <td className="px-4 py-2.5 text-gray-500 text-xs hidden md:table-cell max-w-xs truncate">
                         {s.claudeReasoning
