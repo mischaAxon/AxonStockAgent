@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Search, Zap, ChevronDown, ChevronUp } from 'lucide-react';
 import { useSignals } from '../hooks/useApi';
 import type { Signal } from '../types';
@@ -121,18 +122,30 @@ function EmptyState() {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function SignalsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialSymbol = searchParams.get('symbol') ?? '';
+
   const [page, setPage]         = useState(1);
   const [filter, setFilter]     = useState<VerdictFilter>('');
-  const [search, setSearch]     = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [search, setSearch]     = useState(initialSymbol);
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSymbol);
   const [period, setPeriod]     = useState<Period>('all');
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
-  // Debounce search input 300ms
+  // Debounce search input 300ms + sync to URL
   useEffect(() => {
-    const t = setTimeout(() => { setDebouncedSearch(search); setPage(1); }, 300);
+    const t = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+      // Keep URL in sync: add/remove ?symbol= param
+      if (search) {
+        setSearchParams(prev => { prev.set('symbol', search.toUpperCase()); return prev; }, { replace: true });
+      } else {
+        setSearchParams(prev => { prev.delete('symbol'); return prev; }, { replace: true });
+      }
+    }, 300);
     return () => clearTimeout(t);
-  }, [search]);
+  }, [search, setSearchParams]);
 
   const { data, isLoading } = useSignals(page, 20, debouncedSearch || undefined, filter || undefined);
 
