@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AxonStockAgent.Core\AxonStockAgent.Core.csproj" />
+    <ProjectReference Include="..\AxonStockAgent.Api\AxonStockAgent.Api.csproj" />
   </ItemGroup>
 
   <ItemGroup>
