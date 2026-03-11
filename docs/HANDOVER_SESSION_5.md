@@ -9,7 +9,7 @@
 
 ## Wat is er gedaan in sessie 5
 
-Focus: **stabiliteit, code kwaliteit en testbaarheid**
+Focus: **stabiliteit, code kwaliteit, testbaarheid — en eerste succesvolle E2E run**
 
 ### 1. Shared componenten geëxtraheerd ✅
 - `VerdictBadge` en `ScoreBar` stonden gedupliceerd in 5 pagina's (SignalsPage, DashboardPage, StockDetailPage, WatchlistPage, PortfolioPage)
@@ -26,7 +26,7 @@ Focus: **stabiliteit, code kwaliteit en testbaarheid**
   - Filtert vóór `CountAsync()` — dus `meta.total` is correct gefilterd
 - **Frontend hook:** `useSignals` accepteert nu `since?: string` als 5e parameter
   - Wordt meegestuurd als query param en opgenomen in query key voor caching
-- **SignalsPage:** 
+- **SignalsPage:**
   - `sinceDate()` (returned `Date | null`) → `sinceISO()` (returned `string | undefined`)
   - Client-side `.filter()` volledig verwijderd
   - Paginatie toont nu correcte aantallen bij tijdfilters
@@ -43,7 +43,15 @@ Focus: **stabiliteit, code kwaliteit en testbaarheid**
   - Sectors & News (sector-sentiment, trending)
   - Fundamentals
 - Kleurgecodeerde output (groen/rood) met samenvatting
-- Gebruik: `docker compose up -d` → `./scripts/e2e-smoke-test.sh`
+- **Resultaat: 19/19 checks passing**
+
+### 4. Runtime fixes tijdens E2E test ✅
+Bij het uitvoeren van de smoke test kwamen vier issues aan het licht, alle opgelost:
+
+- **`database/init.sql`** — `__EFMigrationsHistory` kolommen gewijzigd naar snake_case (`migration_id`, `product_version`) zodat ze matchen met wat `UseSnakeCaseNamingConvention()` genereert
+- **`SectorService.GetSectorSummary()`** — EF Core kan geen positional record constructors vertalen naar SQL. Fix: eerst projecteren naar anoniem type, dan in-memory mappen naar `SectorSummaryItem`
+- **`NewsService.GetTrendingSymbols()`** — zelfde patroon: anoniem type in SQL, mappen naar `TrendingSymbolDto` na `ToListAsync()`
+- **`scripts/e2e-smoke-test.sh`** — `displayName` toegevoegd aan register payload, `!` verwijderd uit wachtwoord, fundamentals test accepteert nu 404 (geldig als er geen providers geconfigureerd zijn)
 
 ---
 
@@ -61,15 +69,17 @@ Focus: **stabiliteit, code kwaliteit en testbaarheid**
 | `frontend/src/pages/PortfolioPage.tsx` | **Gewijzigd** (shared imports) |
 | `frontend/src/hooks/useApi.ts` | **Gewijzigd** (since param in useSignals) |
 | `src/AxonStockAgent.Api/Controllers/SignalsController.cs` | **Gewijzigd** (since parameter) |
-| `scripts/e2e-smoke-test.sh` | **Nieuw** |
+| `scripts/e2e-smoke-test.sh` | **Nieuw** (+ runtime fixes) |
+| `database/init.sql` | **Gewijzigd** (snake_case EF migrations tabel) |
+| `SectorService` | **Gewijzigd** (EF query fix) |
+| `NewsService` | **Gewijzigd** (EF query fix) |
 
 ---
 
 ## Bekende aandachtspunten
 
-1. **E2E test nog niet uitgevoerd** — het smoke test script is geschreven maar `docker compose up` is nog niet gedraaid. Dat is de eerste prioriteit voor sessie 6.
-2. **Health endpoint** — controleer of `/health` endpoint aanwezig is in `Program.cs`. Zo niet, moet die nog worden toegevoegd (het smoke test script verwacht deze).
-3. **API_BASE poort** — het smoke test script gaat uit van `http://localhost:5000`. Controleer of dit klopt met de `docker-compose.yml` configuratie.
+1. **Fundamentals 404** — de fundamentals endpoint returnt 404 als er geen provider geconfigureerd is. Dit is verwacht gedrag maar betekent dat de StockDetailPage fundamentals sectie leeg zal zijn totdat een provider (bijv. Finnhub) is ingesteld via de admin UI.
+2. **Worker nog niet getest met echte scan** — de smoke test verifieert dat de API endpoints werken, maar de Worker (ScreenerWorker) is nog niet getest met een echte scan-cyclus. Dat vereist een geconfigureerde provider met API key.
 
 ---
 
@@ -86,35 +96,38 @@ Focus: **stabiliteit, code kwaliteit en testbaarheid**
 | [#9](https://github.com/mischaAxon/AxonStockAgent/issues/9) | Roadmap — Master bouwvolgorde | Open |
 | — | Shared componenten extractie | ✅ (sessie 5) |
 | — | Server-side tijdfilter | ✅ (sessie 5) |
-| — | E2E smoke test script | ✅ (sessie 5) |
+| — | E2E smoke test (19/19 pass) | ✅ (sessie 5) |
+| — | EF Core query fixes (Sector + News) | ✅ (sessie 5) |
+| — | Snake_case migrations fix | ✅ (sessie 5) |
 
 ---
 
 ## Volgende stappen (sessie 6)
 
-### Prioriteit 1: E2E test uitvoeren
-1. `docker compose up -d` — verifieer dat alles opstart
-2. Health endpoint toevoegen als die mist
-3. `./scripts/e2e-smoke-test.sh` uitvoeren
-4. Fixes voor eventuele falende checks
+### Prioriteit 1: Worker testen met echte scan
+1. Finnhub API key configureren via admin UI
+2. Watchlist items toevoegen
+3. Worker scan-cyclus triggeren en verifiëren dat signalen gegenereerd worden
+4. Controleren dat alle pagina's data tonen
 
 ### Prioriteit 2: CI/CD
 5. GitHub Actions workflow: build + test + Docker image push
 6. Container registry setup (GitHub Container Registry of Azure ACR)
+7. Smoke test als CI stap (docker compose up → run script)
 
 ### Prioriteit 3: Azure Deployment
-7. Azure Container Apps configuratie
-8. Custom domain + SSL
-9. Environment secrets configureren
+8. Azure Container Apps configuratie
+9. Custom domain + SSL
+10. Environment secrets configureren
 
 ### Prioriteit 4: Algoritme verfijning
-10. Backtesting framework
-11. Per-sector gewichten
-12. ML-model trainen op historische signalen
+11. Backtesting framework
+12. Per-sector gewichten
+13. ML-model trainen op historische signalen
 
 ### Prioriteit 5: Portfolio verbetering
-13. Live koersen ophalen voor echte P&L berekening
-14. Portfolio performance tracking over tijd
+14. Live koersen ophalen voor echte P&L berekening
+15. Portfolio performance tracking over tijd
 
 ---
 
