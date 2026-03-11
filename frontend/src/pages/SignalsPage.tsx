@@ -9,12 +9,12 @@ import { VerdictBadge, ScoreBar } from '../components/shared';
 type VerdictFilter = '' | 'BUY' | 'SELL' | 'SQUEEZE';
 type Period = 'today' | 'week' | 'month' | 'all';
 
-function sinceDate(period: Period): Date | null {
+function sinceISO(period: Period): string | undefined {
   const now = new Date();
-  if (period === 'today') { const d = new Date(now); d.setHours(0, 0, 0, 0); return d; }
-  if (period === 'week')  { const d = new Date(now); d.setDate(d.getDate() - 7); return d; }
-  if (period === 'month') { const d = new Date(now); d.setMonth(d.getMonth() - 1); return d; }
-  return null;
+  if (period === 'today') { const d = new Date(now); d.setHours(0, 0, 0, 0); return d.toISOString(); }
+  if (period === 'week')  { const d = new Date(now); d.setDate(d.getDate() - 7); return d.toISOString(); }
+  if (period === 'month') { const d = new Date(now); d.setMonth(d.getMonth() - 1); return d.toISOString(); }
+  return undefined;
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -122,13 +122,10 @@ export default function SignalsPage() {
     return () => clearTimeout(t);
   }, [search, setSearchParams]);
 
-  const { data, isLoading } = useSignals(page, 20, debouncedSearch || undefined, filter || undefined);
+  const sinceParam = sinceISO(period);
+  const { data, isLoading } = useSignals(page, 20, debouncedSearch || undefined, filter || undefined, sinceParam);
 
-  // Client-side time filter (API returns newest first, so page 1 covers recent data)
-  const since = sinceDate(period);
-  const signals = (data?.data ?? []).filter(s =>
-    since ? new Date(s.createdAt) >= since : true
-  );
+  const signals = data?.data ?? [];
 
   const totalPages = data?.meta ? Math.ceil(data.meta.total / 20) : 1;
   const noFiltersActive = !filter && !debouncedSearch && period === 'all';

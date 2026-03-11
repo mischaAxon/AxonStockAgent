@@ -19,7 +19,8 @@ public class SignalsController : ControllerBase
         [FromQuery] int page = 1,
         [FromQuery] int limit = 20,
         [FromQuery] string? symbol = null,
-        [FromQuery] string? verdict = null)
+        [FromQuery] string? verdict = null,
+        [FromQuery] DateTime? since = null)
     {
         var query = _db.Signals.AsQueryable();
 
@@ -28,6 +29,9 @@ public class SignalsController : ControllerBase
 
         if (!string.IsNullOrEmpty(verdict))
             query = query.Where(s => s.FinalVerdict == verdict.ToUpper());
+
+        if (since.HasValue)
+            query = query.Where(s => s.CreatedAt >= since.Value.ToUniversalTime());
 
         var total = await query.CountAsync();
 

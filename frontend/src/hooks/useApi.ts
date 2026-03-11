@@ -11,13 +11,14 @@ export function useDashboard() {
 }
 
 // Signals
-export function useSignals(page = 1, limit = 20, symbol?: string, verdict?: string) {
+export function useSignals(page = 1, limit = 20, symbol?: string, verdict?: string, since?: string) {
   const params = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (symbol) params.set('symbol', symbol);
   if (verdict) params.set('verdict', verdict);
+  if (since) params.set('since', since);
 
   return useQuery({
-    queryKey: ['signals', page, limit, symbol, verdict],
+    queryKey: ['signals', page, limit, symbol, verdict, since],
     queryFn: () => api.get<PaginatedResponse<Signal>>(`/v1/signals?${params}`),
   });
 }
