@@ -1,9 +1,77 @@
 import { useState } from 'react';
 import {
   Eye, EyeOff, Plug, RefreshCw,
-  CheckCircle2, AlertTriangle, XCircle, HelpCircle,
+  CheckCircle2, AlertTriangle, XCircle, HelpCircle, ExternalLink,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useProviders, useUpdateProvider, useTestProvider } from '../hooks/useApi';
+
+interface ProviderMeta {
+  description: string;
+  signupUrl: string;
+  pros: string[];
+  cons: string[];
+  supportsRealtime: boolean;
+}
+
+const PROVIDER_META: Record<string, ProviderMeta> = {
+  finnhub: {
+    description: 'Real-time quotes, bedrijfsprofielen, nieuws en fundamentals. Gratis tier bruikbaar voor symboolzoeken en US-quotes — historische OHLCV-candles vereisen een betaald plan.',
+    signupUrl: 'https://finnhub.io/register',
+    pros: ['Gratis tier (60 req/min)', 'Symboolzoeken werkt op gratis tier', 'US-nieuws + bedrijfsprofielen inbegrepen'],
+    cons: ['/stock/candle geblokkeerd op gratis tier (geen signalen)', 'EU-symbolen vereisen betaald plan', 'Beperkte historische data op gratis tier'],
+    supportsRealtime: false,
+  },
+  eodhd: {
+    description: 'Historische OHLCV-data, fundamentals en nieuws voor wereldwijde markten inclusief Euronext. Aanbevolen provider voor signaalgeneratie.',
+    signupUrl: 'https://eodhd.com/register',
+    pros: ['Candle-data werkt op alle betaalde plannen', 'EU + US dekking (bijv. ASML.AS → ASML.AS)', 'Diep historisch archief (30+ jaar)', 'Nieuws + fundamentals + marktdata'],
+    cons: ['Betaald vanaf $19,99/mnd', 'Geen real-time tick-data op basisplan'],
+    supportsRealtime: false,
+  },
+  alpha_vantage: {
+    description: 'Populaire gratis API voor aandelen, forex en crypto. Bekend om de brede ingebouwde technische indicatorbibliotheek.',
+    signupUrl: 'https://www.alphavantage.co/support/#api-key',
+    pros: ['Gratis tier beschikbaar', 'Technische indicatoren ingebouwd (RSI, MACD, …)', 'EU + US dekking'],
+    cons: ['Slechts 25 req/dag op gratis tier', 'Rate limits vereisen 12–15s wachttijd tussen calls'],
+    supportsRealtime: false,
+  },
+  twelve_data: {
+    description: 'Moderne REST + WebSocket API voor real-time en historische marktdata. Ondersteunt aandelen, forex, crypto en ETFs.',
+    signupUrl: 'https://twelvedata.com/register',
+    pros: ['Gratis tier (8 req/min, 800/dag)', 'WebSocket real-time feed beschikbaar', 'EU + US aandelen + crypto'],
+    cons: ['WebSocket alleen op betaalde plannen', 'Gratis tier beperkt in datadepth (1 jaar)'],
+    supportsRealtime: true,
+  },
+  fmp: {
+    description: 'Financial Modeling Prep — gespecialiseerd in diepgaande fundamentals: balansen, kasstroomoverzichten, DCF-modellen en analyst ratings.',
+    signupUrl: 'https://site.financialmodelingprep.com/register',
+    pros: ['Diepste fundamentals-dataset', 'Gratis tier beschikbaar', 'Analyst ratings + DCF + insider-transacties'],
+    cons: ['Beperkte EU-dekking op gratis tier', 'Primair US-gericht', 'Geen real-time data op gratis tier'],
+    supportsRealtime: false,
+  },
+  stockgeist: {
+    description: 'Gespecialiseerde sentimentanalyse van sociale media (Reddit, Twitter) en nieuws, afgestemd op beurscontext.',
+    signupUrl: 'https://www.stockgeist.ai',
+    pros: ['Gespecialiseerd in beursgerelateerd sentiment', 'Real-time social media monitoring', 'Alternatieve data-inzichten'],
+    cons: ['Voornamelijk US-aandelen', 'Betaald plan vereist', 'Geen marktdata of fundamentals'],
+    supportsRealtime: true,
+  },
+  newsdata: {
+    description: 'Nieuwsaggregator met toegang tot duizenden mondiale bronnen. Simpele REST API, ideaal als aanvullende nieuwsbron.',
+    signupUrl: 'https://newsdata.io/register',
+    pros: ['Groot bereik (100+ landen, 30+ talen)', 'Gratis tier (200 req/dag)', 'EU + US nieuws'],
+    cons: ['Geen marktdata of fundamentals', 'Sentimentscores niet ingebouwd', 'Nieuwsrelevantie varieert'],
+    supportsRealtime: false,
+  },
+  saxo: {
+    description: 'Saxo Bank OpenAPI biedt toegang tot live koersen en orderboekdata rechtstreeks via je Saxo-handelsaccount.',
+    signupUrl: 'https://www.developer.saxo/openapi/appstore',
+    pros: ['Broker-directe integratie (geen extra datafeed nodig)', 'Hoge data-kwaliteit', 'EU-markt uitstekend gedekt'],
+    cons: ['Vereist actief Saxo Bank handelsaccount', 'Complexe OAuth2-setup', 'Niet bruikbaar zonder Saxo-account'],
+    supportsRealtime: true,
+  },
+};
 
 interface Provider {
   id: number;
@@ -36,7 +104,7 @@ const TYPE_COLORS: Record<string, string> = {
   all:          'bg-axon-600/20 text-axon-400',
 };
 
-const HEALTH: Record<string, { color: string; label: string; Icon: React.FC<{ size?: number; className?: string }> }> = {
+const HEALTH: Record<string, { color: string; label: string; Icon: LucideIcon }> = {
   healthy:  { color: 'text-green-400',  label: 'Gezond',   Icon: CheckCircle2  },
   degraded: { color: 'text-orange-400', label: 'Beperkt',  Icon: AlertTriangle },
   down:     { color: 'text-red-400',    label: 'Offline',  Icon: XCircle       },
@@ -116,6 +184,36 @@ function ProviderCard({ provider }: { provider: Provider }) {
         </button>
       </div>
 
+      {/* Description + pros/cons + signup link */}
+      {PROVIDER_META[provider.name] && (() => {
+        const meta = PROVIDER_META[provider.name];
+        return (
+          <div className="text-xs text-gray-400 space-y-2">
+            <p>{meta.description}</p>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+              {meta.pros.map(p => (
+                <span key={p} className="flex items-start gap-1 text-green-400/80">
+                  <span className="mt-0.5 flex-shrink-0">+</span>{p}
+                </span>
+              ))}
+              {meta.cons.map(c => (
+                <span key={c} className="flex items-start gap-1 text-red-400/70">
+                  <span className="mt-0.5 flex-shrink-0">−</span>{c}
+                </span>
+              ))}
+            </div>
+            <a
+              href={meta.signupUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-axon-400 hover:text-axon-300 transition-colors"
+            >
+              API key aanmaken <ExternalLink size={11} />
+            </a>
+          </div>
+        );
+      })()}
+
       {/* API key input */}
       <div>
         <label className="block text-xs text-gray-500 mb-1.5">API Key</label>
@@ -147,8 +245,13 @@ function ProviderCard({ provider }: { provider: Provider }) {
         </div>
       </div>
 
-      {/* Badges: EU / US / rate limit / prijs */}
+      {/* Badges: Realtime / EU / US / rate limit / prijs */}
       <div className="flex flex-wrap gap-1.5">
+        {PROVIDER_META[provider.name]?.supportsRealtime ? (
+          <span className="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400 font-medium">⚡ Realtime</span>
+        ) : (
+          <span className="px-2 py-0.5 rounded text-xs bg-blue-500/10 text-blue-400 font-medium">📊 EOD</span>
+        )}
         {provider.supportsEu && (
           <span className="px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-300">🇪🇺 EU</span>
         )}

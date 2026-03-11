@@ -4,7 +4,7 @@ import { useWatchlist, useAddToWatchlist, useRemoveFromWatchlist, useLatestSigna
 import { Plus, X } from 'lucide-react';
 import type { WatchlistItem, Signal } from '../types';
 import { relativeTime } from '../utils/formatTime';
-import { VerdictBadge, ScoreBar } from '../components/shared';
+import { VerdictBadge, ScoreBar, SymbolSearch } from '../components/shared';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -133,17 +133,15 @@ export default function WatchlistPage() {
 
       {/* Symbol toevoegen */}
       <div className="flex gap-2 mb-4">
-        <input
-          type="text"
+        <SymbolSearch
           value={newSymbol}
-          onChange={e => setNewSymbol(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleAdd()}
-          placeholder="Symbol toevoegen (bijv. ASML.AS)"
-          className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-axon-400 w-72 text-sm"
+          onChange={symbol => setNewSymbol(symbol)}
+          placeholder="Zoek symbool of bedrijf… (bijv. ASML of Apple)"
+          className="w-80"
         />
         <button
           onClick={handleAdd}
-          disabled={addMutation.isPending}
+          disabled={addMutation.isPending || !newSymbol.trim()}
           className="bg-axon-600 hover:bg-axon-500 disabled:opacity-50 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors"
         >
           <Plus size={16} /> Toevoegen

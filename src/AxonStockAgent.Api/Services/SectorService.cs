@@ -89,11 +89,13 @@ public class SectorService
     /// <summary>Geeft alle unieke sectoren met het aantal aandelen per sector.</summary>
     public async Task<SectorSummaryItem[]> GetSectorSummary()
     {
-        return await _db.Watchlist
+        var rows = await _db.Watchlist
             .Where(w => w.IsActive && w.Sector != null)
             .GroupBy(w => w.Sector!)
-            .Select(g => new SectorSummaryItem(g.Key, g.Count()))
+            .Select(g => new { Sector = g.Key, Count = g.Count() })
             .OrderByDescending(x => x.Count)
             .ToArrayAsync();
+
+        return rows.Select(r => new SectorSummaryItem(r.Sector, r.Count)).ToArray();
     }
 }

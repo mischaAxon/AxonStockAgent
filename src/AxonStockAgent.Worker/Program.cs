@@ -8,7 +8,8 @@ var builder = Host.CreateApplicationBuilder(args);
 
 // Database (zelfde connection string als API)
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
+           .UseSnakeCaseNamingConvention());
 
 // HTTP client factory (voor providers)
 builder.Services.AddHttpClient();

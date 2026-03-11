@@ -108,7 +108,7 @@ public class EodhdProvider : IMarketDataProvider, INewsProvider, IFundamentalsPr
                 .Select(c =>
                 {
                     var dateStr = SafeString(c, "date");
-                    DateTime.TryParse(dateStr, out var dt);
+                    DateTime.TryParse(dateStr, null, System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal, out var dt);
                     return new Candle(
                         dt,
                         SafeDouble(c, "open") ?? 0,
@@ -168,7 +168,7 @@ public class EodhdProvider : IMarketDataProvider, INewsProvider, IFundamentalsPr
                 .Select(a =>
                 {
                     var dateStr = SafeString(a, "date");
-                    DateTime.TryParse(dateStr, out var publishedAt);
+                    DateTime.TryParse(dateStr, null, System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal, out var publishedAt);
 
                     // EODHD biedt ingebouwd sentiment
                     double sentimentScore = 0;
@@ -352,7 +352,7 @@ public class EodhdProvider : IMarketDataProvider, INewsProvider, IFundamentalsPr
                 .Select(t =>
                 {
                     var dateStr = SafeString(t, "date");
-                    if (!DateTime.TryParse(dateStr, out var date)) return null;
+                    if (!DateTime.TryParse(dateStr, null, System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal, out var date)) return null;
 
                     var shares = Math.Abs(SafeDouble(t, "transactionShares") ?? 0);
                     var price  = SafeDouble(t, "transactionPrice") ?? 0;

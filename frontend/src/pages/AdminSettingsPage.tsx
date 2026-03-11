@@ -1,7 +1,42 @@
 import { useState } from 'react';
-import { RotateCcw, Save, AlertCircle } from 'lucide-react';
-import { useAlgoSettings, useUpdateAlgoSetting, useResetAlgoSettings } from '../hooks/useApi';
+import { RotateCcw, Save, AlertCircle, AlertTriangle } from 'lucide-react';
+import { useAlgoSettings, useUpdateAlgoSetting, useResetAlgoSettings, useProviders } from '../hooks/useApi';
 import type { AlgoSetting } from '../types';
+
+// Providers die realtime candle-data kunnen leveren
+const REALTIME_PROVIDERS = ['twelve_data', 'saxo'];
+
+function RealtimeWarning({ settings }: { settings: Record<string, AlgoSetting[]> }) {
+  const { data: providerData } = useProviders();
+  const providers: { name: string; isEnabled: boolean }[] =
+    (providerData as { data?: { name: string; isEnabled: boolean }[] } | undefined)?.data ?? [];
+
+  const scanSettings = settings['scan'] ?? [];
+  const realtimeModeSetting = scanSettings.find(s => s.key === 'realtime_mode');
+  const realtimeModeOn = realtimeModeSetting?.value === 'true';
+
+  if (!realtimeModeOn) return null;
+
+  const hasRealtimeProvider = providers.some(
+    p => p.isEnabled && REALTIME_PROVIDERS.includes(p.name)
+  );
+
+  if (hasRealtimeProvider) return null;
+
+  return (
+    <div className="flex items-start gap-3 rounded-lg bg-amber-500/10 border border-amber-500/30 px-4 py-3 text-sm text-amber-400 mb-4">
+      <AlertTriangle size={15} className="mt-0.5 flex-shrink-0" />
+      <div>
+        <span className="font-semibold">Realtime mode is ingeschakeld maar geen realtime provider is actief.</span>
+        {' '}Schakel minimaal één van de volgende providers in op de{' '}
+        <a href="/admin/providers" className="underline hover:text-amber-300 transition-colors">Providers-pagina</a>
+        {': '}
+        <span className="font-mono">Twelve Data</span> of{' '}
+        <span className="font-mono">Saxo Bank</span>.
+      </div>
+    </div>
+  );
+}
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -246,6 +281,8 @@ export default function AdminSettingsPage() {
           <p className="text-xs text-gray-600 mt-1">Controleer of de database correct geseeded is.</p>
         </div>
       )}
+
+      <RealtimeWarning settings={grouped} />
 
       {orderedCategories.map(category => (
         <CategorySection

@@ -72,6 +72,11 @@ public class FinnhubProvider : IMarketDataProvider, INewsProvider, IFundamentals
 
             return times.Select((t, i) => new Candle(t, opens[i], highs[i], lows[i], closes[i], vols[i])).ToArray();
         }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
+        {
+            _logger.LogDebug("Finnhub: {Symbol} niet beschikbaar op huidig plan (403)", symbol);
+            return null;
+        }
         catch (Exception ex)
         {
             _logger.LogWarning("GetCandles mislukt voor {Symbol}: {Message}", symbol, ex.Message);
@@ -133,6 +138,12 @@ public class FinnhubProvider : IMarketDataProvider, INewsProvider, IFundamentals
                 ))
                 .ToArray();
         }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
+        {
+            // 403 = symbool niet ondersteund op huidig plan (bijv. EU-symbolen op gratis tier)
+            _logger.LogDebug("Finnhub: {Symbol} niet beschikbaar op huidig plan (403)", symbol ?? "general");
+            return Array.Empty<NewsArticle>();
+        }
         catch (Exception ex)
         {
             _logger.LogWarning("GetNews mislukt: {Message}", ex.Message);
@@ -156,6 +167,11 @@ public class FinnhubProvider : IMarketDataProvider, INewsProvider, IFundamentals
                 var bearish = sent.TryGetProperty("bearishPercent", out var be) ? be.GetDouble() : 0.5;
                 return bullish - bearish; // -1..+1
             }
+            return 0;
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
+        {
+            _logger.LogDebug("Finnhub: sentiment voor {Symbol} niet beschikbaar op huidig plan (403)", symbol);
             return 0;
         }
         catch (Exception ex)
@@ -357,5 +373,39 @@ public class FinnhubProvider : IMarketDataProvider, INewsProvider, IFundamentals
         if (!element.TryGetProperty(property, out var prop)) return null;
         if (prop.ValueKind == JsonValueKind.Null) return null;
         try { return prop.GetDouble(); } catch { return null; }
+    }
+
+    public async Task<AxonStockAgent.Api.Services.SymbolSearchResult[]> SearchSymbols(string query)
+    {
+        await RateLimit();
+        var url = $"{BaseUrl}/search?q={Uri.EscapeDataString(query)}&token={_apiKey}";
+        try
+        {
+            var json = await _http.GetStringAsync(url);
+            using var doc = JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("result", out var results))
+                return Array.Empty<AxonStockAgent.Api.Services.SymbolSearchResult>();
+
+            return results.EnumerateArray()
+                .Take(10)
+                .Select(r => new AxonStockAgent.Api.Services.SymbolSearchResult(
+                    Symbol:      r.TryGetProperty("symbol",      out var s)  ? s.GetString()  ?? "" : "",
+                    Description: r.TryGetProperty("description", out var d)  ? d.GetString()  ?? "" : "",
+                    Exchange:    r.TryGetProperty("primaryExchange", out var e) ? e.GetString() ?? "" : "",
+                    Type:        r.TryGetProperty("type",        out var t)  ? t.GetString()  ?? "" : ""
+                ))
+                .Where(r => !string.IsNullOrEmpty(r.Symbol))
+                .ToArray();
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
+        {
+            _logger.LogDebug("Finnhub symbol search niet beschikbaar op huidig plan");
+            return Array.Empty<AxonStockAgent.Api.Services.SymbolSearchResult>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("SearchSymbols mislukt: {Message}", ex.Message);
+            return Array.Empty<AxonStockAgent.Api.Services.SymbolSearchResult>();
+        }
     }
 }

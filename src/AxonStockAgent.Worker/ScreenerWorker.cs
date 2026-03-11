@@ -37,33 +37,81 @@ public class ScreenerWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("AxonStockAgent Worker gestart — scan interval: {Interval} minuten",
-            _config.ScanIntervalMinutes);
+        _logger.LogInformation("AxonStockAgent Worker gestart");
 
         // Wacht even tot de database klaar is bij cold start
         await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
 
+        DateOnly? lastEodScanDate = null;
+
         while (!stoppingToken.IsCancellationRequested)
         {
-            if (IsMarketHours())
+            using var modeScope = _scopeFactory.CreateScope();
+            var algoSettings = modeScope.ServiceProvider.GetRequiredService<AlgoSettingsService>();
+            var realtimeMode = await algoSettings.GetBoolAsync("scan", "realtime_mode", false);
+
+            if (realtimeMode)
             {
-                try
+                // ── Realtime mode: scan elke N minuten tijdens markturen ──
+                if (IsMarketHours())
                 {
-                    await RunScanCycleAsync(stoppingToken);
+                    try
+                    {
+                        _logger.LogInformation("Realtime scan gestart ({Time} UTC)", DateTime.UtcNow.ToString("HH:mm"));
+                        await RunScanCycleAsync(stoppingToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Realtime scan cycle mislukt");
+                    }
                 }
-                catch (Exception ex)
+                else
                 {
-                    _logger.LogError(ex, "Scan cycle mislukt");
+                    _logger.LogDebug("Realtime mode: buiten markturen ({Time} UTC)", DateTime.UtcNow.ToString("HH:mm"));
                 }
+
+                var intervalMinutes = (int)await algoSettings.GetDecimalAsync("scan", "realtime_interval_minutes", 30m);
+                await Task.Delay(TimeSpan.FromMinutes(Math.Max(5, intervalMinutes)), stoppingToken);
             }
             else
             {
-                _logger.LogDebug("Buiten markturen ({Time} UTC), wacht...", DateTime.UtcNow.ToString("HH:mm"));
-            }
+                // ── EOD mode: één scan per dag om 22:30 UTC (na US market close) ──
+                var now          = DateTime.UtcNow;
+                var today        = DateOnly.FromDateTime(now);
+                var isAfterClose = now.TimeOfDay >= TimeSpan.FromHours(22.5);
+                var isWeekday    = now.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday);
+                var notYetRan    = lastEodScanDate != today;
 
-            var intervalMinutes = await GetScanIntervalAsync();
-            await Task.Delay(TimeSpan.FromMinutes(intervalMinutes), stoppingToken);
+                if (isAfterClose && isWeekday && notYetRan)
+                {
+                    try
+                    {
+                        _logger.LogInformation("EOD scan gestart ({Time} UTC)", now.ToString("HH:mm"));
+                        await RunScanCycleAsync(stoppingToken);
+                        lastEodScanDate = today;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "EOD scan cycle mislukt");
+                    }
+                }
+                else
+                {
+                    _logger.LogDebug("EOD mode: wacht op 22:30 UTC — nu {Time} UTC", now.ToString("HH:mm"));
+                }
+
+                // Check elke 5 minuten of het tijd is voor EOD scan
+                await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
+            }
         }
+    }
+
+    private static bool IsMarketHours()
+    {
+        var now = DateTime.UtcNow;
+        if (now.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) return false;
+        // EU open 08:00, US close 21:00 UTC
+        return now.TimeOfDay >= TimeSpan.FromHours(8) && now.TimeOfDay <= TimeSpan.FromHours(21);
     }
 
     private async Task RunScanCycleAsync(CancellationToken ct)
@@ -388,26 +436,4 @@ public class ScreenerWorker : BackgroundService
         return true; // is een nieuw signaal
     }
 
-    /// <summary>Haal scan interval op uit AlgoSettings (fallback naar config).</summary>
-    private async Task<int> GetScanIntervalAsync()
-    {
-        try
-        {
-            using var scope = _scopeFactory.CreateScope();
-            var algoSettings = scope.ServiceProvider.GetRequiredService<AlgoSettingsService>();
-            var interval = await algoSettings.GetDecimalAsync("scan", "scan_interval_minutes", _config.ScanIntervalMinutes);
-            return Math.Max(5, (int)interval);
-        }
-        catch
-        {
-            return _config.ScanIntervalMinutes;
-        }
-    }
-
-    private static bool IsMarketHours()
-    {
-        var now = DateTime.UtcNow;
-        if (now.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) return false;
-        return now.TimeOfDay >= TimeSpan.FromHours(8) && now.TimeOfDay <= TimeSpan.FromHours(21);
-    }
 }

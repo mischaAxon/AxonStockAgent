@@ -91,17 +91,25 @@ public class ProviderManager
     // ── Public API ─────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Geeft de beste market-data provider, optioneel gefilterd op exchange.
+    /// Geeft de beste market-data provider voor het opgegeven symbool.
+    /// Prioriteit: exchange-match → EODHD (betrouwbare candles) → eerste beschikbare.
     /// </summary>
     public async Task<IMarketDataProvider?> GetMarketDataProvider(string? preferredExchange = null)
     {
         await EnsureLoaded();
+
+        // 1. Probeer exchange-specifieke match
         if (preferredExchange != null)
         {
             var match = _marketData!.FirstOrDefault(p =>
                 p.SupportedExchanges.Contains(preferredExchange, StringComparer.OrdinalIgnoreCase));
             if (match != null) return match;
         }
+
+        // 2. Geef voorkeur aan EODHD — Finnhub blokkeert /stock/candle op gratis tier
+        var eodhd = _marketData!.OfType<EodhdProvider>().FirstOrDefault();
+        if (eodhd != null) return eodhd;
+
         return _marketData!.FirstOrDefault();
     }
 
@@ -127,4 +135,32 @@ public class ProviderManager
             ?? (object?)_news!.FirstOrDefault(p => p.Name == name)
             ?? (object?)_fundamentals!.FirstOrDefault(p => p.Name == name);
     }
+
+    /// <summary>Zoek symbolen op ticker of bedrijfsnaam via actieve providers.</summary>
+    public async Task<SymbolSearchResult[]> SearchSymbols(string query)
+    {
+        await EnsureLoaded();
+
+        // Probeer Finnhub eerst (snelste zoekfunctie)
+        var finnhub = _marketData!.OfType<FinnhubProvider>().FirstOrDefault()
+                   ?? _news!.OfType<FinnhubProvider>().FirstOrDefault()  as FinnhubProvider;
+        if (finnhub != null)
+        {
+            var results = await finnhub.SearchSymbols(query);
+            if (results.Length > 0) return results;
+        }
+
+        // Fallback: filter op eigen watchlist-symbolen
+        var watchlist = await _db.Watchlist
+            .Where(w => w.IsActive && (
+                w.Symbol.Contains(query.ToUpper()) ||
+                (w.Name != null && w.Name.ToLower().Contains(query.ToLower()))))
+            .Select(w => new SymbolSearchResult(w.Symbol, w.Name ?? w.Symbol, w.Exchange ?? "", ""))
+            .Take(10)
+            .ToArrayAsync();
+
+        return watchlist;
+    }
 }
+
+public record SymbolSearchResult(string Symbol, string Description, string Exchange, string Type);

@@ -4,7 +4,7 @@ import { usePortfolio, useUpsertPortfolio, useDeletePortfolio, useLatestSignals 
 import { Plus, Trash2, Briefcase } from 'lucide-react';
 import type { PortfolioItem, Signal } from '../types';
 import { relativeTime } from '../utils/formatTime';
-import { VerdictBadge } from '../components/shared';
+import { VerdictBadge, SymbolSearch } from '../components/shared';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -80,13 +80,11 @@ export default function PortfolioPage() {
 
       {/* Add position form */}
       <div className="flex gap-2 mb-6 flex-wrap">
-        <input
-          type="text"
+        <SymbolSearch
           value={form.symbol}
-          onChange={e => setForm({ ...form, symbol: e.target.value })}
-          onKeyDown={e => e.key === 'Enter' && handleAdd()}
-          placeholder="Symbol"
-          className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-axon-400 w-36 text-sm"
+          onChange={symbol => setForm({ ...form, symbol })}
+          placeholder="Zoek symbool…"
+          className="w-64"
         />
         <input
           type="number"

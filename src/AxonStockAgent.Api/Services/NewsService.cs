@@ -73,6 +73,7 @@ public class NewsService
         int saved = 0;
         foreach (var provider in newsProviders)
         {
+            // Per-symbol company news
             foreach (var item in symbols)
             {
                 try
@@ -112,6 +113,38 @@ public class NewsService
                 {
                     _logger.LogWarning(ex, "Failed to fetch news for {Symbol} from {Provider}", item.Symbol, provider.Name);
                 }
+            }
+
+            // Algemeen marktnieuws (geen sector-filter)
+            try
+            {
+                var generalArticles = await provider.GetNews(symbol: null, limit: 30);
+                foreach (var article in generalArticles)
+                {
+                    if (existingHeadlines.Contains(article.Headline))
+                        continue;
+
+                    var entity = new NewsArticleEntity
+                    {
+                        Source = provider.Name,
+                        Headline = article.Headline,
+                        Summary = article.Summary,
+                        Url = article.Url,
+                        Symbol = null,
+                        Sector = null,
+                        SentimentScore = article.SentimentScore,
+                        PublishedAt = article.PublishedAt,
+                        FetchedAt = DateTime.UtcNow
+                    };
+
+                    _db.NewsArticles.Add(entity);
+                    existingHeadlines.Add(article.Headline);
+                    saved++;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to fetch general news from {Provider}", provider.Name);
             }
         }
 
@@ -188,12 +221,14 @@ public class NewsService
     public async Task<List<TrendingSymbolDto>> GetTrendingSymbols(int limit = 10)
     {
         var since = DateTime.UtcNow.AddHours(-24);
-        return await _db.NewsArticles
+        var rows = await _db.NewsArticles
             .Where(n => n.PublishedAt >= since && n.Symbol != null)
             .GroupBy(n => n.Symbol!)
-            .Select(g => new TrendingSymbolDto(g.Key, g.Count(), g.Average(x => x.SentimentScore)))
-            .OrderByDescending(x => x.ArticleCount)
+            .Select(g => new { Symbol = g.Key, Count = g.Count(), AvgSentiment = g.Average(x => x.SentimentScore) })
+            .OrderByDescending(x => x.Count)
             .Take(limit)
             .ToListAsync();
+
+        return rows.Select(r => new TrendingSymbolDto(r.Symbol, r.Count, r.AvgSentiment)).ToList();
     }
 }

@@ -11,19 +11,23 @@ class ApiClient {
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const token = await getAccessToken();
-    const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(options.headers as Record<string, string> | undefined),
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
 
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...authHeader,
-        ...options.headers,
-      },
+      headers,
     });
 
     if (!response.ok) {
       throw new Error(`API error: ${response.status} ${response.statusText}`);
+    }
+
+    if (response.status === 204 || response.headers.get('content-length') === '0') {
+      return null as T;
     }
 
     return response.json();

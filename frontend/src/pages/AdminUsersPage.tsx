@@ -1,5 +1,15 @@
 import { useAdminUsers, useUpdateUser } from '../hooks/useApi';
 
+interface User {
+  id: string;
+  email: string;
+  displayName: string;
+  role: string;
+  isActive: boolean;
+  createdAt: string;
+  lastLoginAt: string | null;
+}
+
 const roleColors: Record<string, string> = {
   admin: 'bg-axon-600/20 text-axon-400',
   user: 'bg-gray-700/50 text-gray-400',
@@ -9,7 +19,7 @@ export default function AdminUsersPage() {
   const { data, isLoading, error } = useAdminUsers();
   const updateUser = useUpdateUser();
 
-  const users = data?.data ?? [];
+  const users = (data?.data ?? []) as User[];
 
   function handleRoleToggle(id: string, currentRole: string) {
     const newRole = currentRole === 'admin' ? 'user' : 'admin';
@@ -51,15 +61,7 @@ export default function AdminUsersPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-800">
-              {users.map((user: {
-                id: string;
-                email: string;
-                displayName: string;
-                role: string;
-                isActive: boolean;
-                createdAt: string;
-                lastLoginAt: string | null;
-              }) => (
+              {users.map((user) => (
                 <tr key={user.id} className="hover:bg-gray-800/30 transition-colors">
                   <td className="px-6 py-4 text-white font-medium">{user.displayName || '—'}</td>
                   <td className="px-6 py-4 text-gray-300">{user.email}</td>

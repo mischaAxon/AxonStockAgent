@@ -1,5 +1,5 @@
 import { Outlet, NavLink } from 'react-router-dom';
-import { LayoutDashboard, Activity, Eye, Grid2x2, Briefcase, Users, Plug, LogOut, Newspaper } from 'lucide-react';
+import { LayoutDashboard, Activity, Eye, Grid2x2, Briefcase, Users, Plug, LogOut, Newspaper, Settings } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { NewsTicker } from '../NewsTicker';
 
@@ -13,8 +13,9 @@ const navItems = [
 ];
 
 const adminItems = [
-  { to: '/admin/users',     label: 'Gebruikers', icon: Users },
-  { to: '/admin/providers', label: 'Providers',  icon: Plug  },
+  { to: '/admin/users',     label: 'Gebruikers', icon: Users    },
+  { to: '/admin/providers', label: 'Providers',  icon: Plug     },
+  { to: '/admin/settings',  label: 'Instellingen', icon: Settings },
 ];
 
 const navLinkClass = (isActive: boolean) =>

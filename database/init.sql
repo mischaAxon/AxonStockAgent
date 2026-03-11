@@ -204,9 +204,10 @@ INSERT INTO algo_settings (category, key, value, description, value_type, min_va
     ('thresholds', 'sell_threshold',    '0.35', 'Maximum score voor SELL signaal',       'decimal', 0.0, 1.0),
     ('thresholds', 'squeeze_threshold', '0.80', 'Minimum score voor SQUEEZE signaal',   'decimal', 0.0, 1.0),
     -- Scan instellingen
-    ('scan', 'scan_interval_minutes', '30',    'Interval tussen watchlist scans',        'integer', 5,   1440),
-    ('scan', 'lookback_days',         '90',    'Aantal dagen historische data',          'integer', 30,  365),
-    ('scan', 'min_volume',            '100000','Minimum gemiddeld volume',               'integer', 0,   null),
+    ('scan', 'realtime_mode',             'false', 'Realtime scanmodus — scant elke N minuten tijdens markturen (standaard: EOD dagelijks 22:30 UTC)', 'boolean', null, null),
+    ('scan', 'realtime_interval_minutes', '30',    'Interval in minuten bij realtime scan (alleen actief als realtime_mode aan staat)', 'integer', 5, 360),
+    ('scan', 'lookback_days',             '90',    'Aantal dagen historische data',          'integer', 30,  365),
+    ('scan', 'min_volume',                '100000','Minimum gemiddeld volume',               'integer', 0,   null),
     -- Notificatie instellingen
     ('notifications', 'notify_buy',     'true',  'Notificeer bij BUY signalen',     'boolean', null, null),
     ('notifications', 'notify_sell',    'true',  'Notificeer bij SELL signalen',    'boolean', null, null),
@@ -316,3 +317,15 @@ CREATE TABLE IF NOT EXISTS insider_transactions (
 
 CREATE INDEX IF NOT EXISTS idx_insider_symbol ON insider_transactions(symbol);
 CREATE INDEX IF NOT EXISTS idx_insider_date   ON insider_transactions(transaction_date DESC);
+
+-- EF Core migrations history: mark all migrations as applied so EF doesn't re-run them
+-- UseSnakeCaseNamingConvention() converts column names to snake_case
+CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory" (
+    migration_id    character varying(150) NOT NULL,
+    product_version character varying(32)  NOT NULL,
+    CONSTRAINT "PK___EFMigrationsHistory" PRIMARY KEY (migration_id)
+);
+
+INSERT INTO "__EFMigrationsHistory" (migration_id, product_version)
+VALUES ('20260310192814_AddCompanyFundamentalsAndInsiderTransactions', '8.0.4')
+ON CONFLICT DO NOTHING;

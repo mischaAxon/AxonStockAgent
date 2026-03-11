@@ -98,9 +98,10 @@ public class AlgoSettingsService
                 ('thresholds', 'buy_threshold',     '0.65', 'Minimum score voor BUY signaal',       'decimal', 0.0, 1.0),
                 ('thresholds', 'sell_threshold',    '0.35', 'Maximum score voor SELL signaal',       'decimal', 0.0, 1.0),
                 ('thresholds', 'squeeze_threshold', '0.80', 'Minimum score voor SQUEEZE signaal',   'decimal', 0.0, 1.0),
-                ('scan', 'scan_interval_minutes', '30',    'Interval tussen watchlist scans',        'integer', 5,   1440),
-                ('scan', 'lookback_days',         '90',    'Aantal dagen historische data',          'integer', 30,  365),
-                ('scan', 'min_volume',            '100000','Minimum gemiddeld volume',               'integer', 0,   null),
+                ('scan', 'realtime_mode',             'false', 'Realtime scanmodus — scant elke N minuten tijdens markturen (standaard: EOD dagelijks 22:30 UTC)', 'boolean', null, null),
+                ('scan', 'realtime_interval_minutes', '30', 'Interval in minuten bij realtime scan (alleen actief als realtime_mode aan staat)', 'integer', 5, 360),
+                ('scan', 'lookback_days',             '90',    'Aantal dagen historische data',          'integer', 30,  365),
+                ('scan', 'min_volume',                '100000','Minimum gemiddeld volume',               'integer', 0,   null),
                 ('notifications', 'notify_buy',     'true',  'Notificeer bij BUY signalen',     'boolean', null, null),
                 ('notifications', 'notify_sell',    'true',  'Notificeer bij SELL signalen',    'boolean', null, null),
                 ('notifications', 'notify_squeeze', 'true',  'Notificeer bij SQUEEZE signalen', 'boolean', null, null)

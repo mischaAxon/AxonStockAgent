@@ -3,7 +3,7 @@ import {
   Zap, Factory, Layers, Building2, Wifi, MessageCircle,
   BarChart2, RefreshCw,
 } from 'lucide-react';
-import type { FC } from 'react';
+import type { LucideIcon } from 'lucide-react';
 import { useSectors, useWatchlist, useEnrichWatchlist } from '../hooks/useApi';
 import { useAuth } from '../contexts/AuthContext';
 import type { WatchlistItem } from '../types';
@@ -11,7 +11,7 @@ import type { WatchlistItem } from '../types';
 type SectorSummary = { sector: string; count: number };
 
 interface SectorConfig {
-  Icon:  FC<{ size?: number; className?: string }>;
+  Icon:  LucideIcon;
   color: string;
   bg:    string;
 }
