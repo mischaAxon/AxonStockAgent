@@ -1,47 +1,360 @@
+using System.Globalization;
+using AxonStockAgent.Api.Data;
+using AxonStockAgent.Api.Data.Entities;
+using AxonStockAgent.Api.Services;
+using AxonStockAgent.Core.Analysis;
+using AxonStockAgent.Core.Interfaces;
 using AxonStockAgent.Core.Models;
+using AxonStockAgent.Worker.Services;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace AxonStockAgent.Worker;
 
 /// <summary>
-/// Background worker that scans stocks on a regular interval.
-/// Uses the existing SwingEdge indicator engine from Core.
-/// Full implementation migrated from the original SwingEdgeScreener.
+/// Background worker die periodiek de watchlist scant:
+/// 1. Haal actieve symbolen uit de watchlist
+/// 2. Per symbool: fetch candles → technische analyse → sentiment → Claude AI
+/// 3. Bereken gewogen eindscore op basis van AlgoSettings
+/// 4. Sla signalen op in de database
+/// 5. Stuur Telegram notificaties voor relevante signalen
 /// </summary>
 public class ScreenerWorker : BackgroundService
 {
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<ScreenerWorker> _logger;
     private readonly ScreenerConfig _config;
 
-    public ScreenerWorker(ILogger<ScreenerWorker> logger, IOptions<ScreenerConfig> config)
+    public ScreenerWorker(
+        IServiceScopeFactory scopeFactory,
+        ILogger<ScreenerWorker> logger,
+        IOptions<ScreenerConfig> config)
     {
+        _scopeFactory = scopeFactory;
         _logger = logger;
         _config = config.Value;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("AxonStockAgent Worker gestart");
+        _logger.LogInformation("AxonStockAgent Worker gestart — scan interval: {Interval} minuten",
+            _config.ScanIntervalMinutes);
+
+        // Wacht even tot de database klaar is bij cold start
+        await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)
         {
             if (IsMarketHours())
             {
-                _logger.LogInformation("Scan cycle gestart om {Time}", DateTime.UtcNow);
-                // TODO: Migrate full scan logic from SwingEdgeScreener.cs
-                // - Fetch candles per symbol
-                // - Run IndicatorEngine.Analyze()
-                // - Run AI enrichment (ML + Claude + Sentiment)
-                // - Save signals to PostgreSQL
-                // - Send Telegram notifications
-                _logger.LogInformation("Scan cycle voltooid");
+                try
+                {
+                    await RunScanCycleAsync(stoppingToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Scan cycle mislukt");
+                }
             }
             else
             {
-                _logger.LogDebug("Buiten markturen, wacht...");
+                _logger.LogDebug("Buiten markturen ({Time} UTC), wacht...", DateTime.UtcNow.ToString("HH:mm"));
             }
 
-            await Task.Delay(TimeSpan.FromMinutes(_config.ScanIntervalMinutes), stoppingToken);
+            var intervalMinutes = await GetScanIntervalAsync();
+            await Task.Delay(TimeSpan.FromMinutes(intervalMinutes), stoppingToken);
+        }
+    }
+
+    private async Task RunScanCycleAsync(CancellationToken ct)
+    {
+        using var scope = _scopeFactory.CreateScope();
+
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var providers = scope.ServiceProvider.GetRequiredService<ProviderManager>();
+        var algoSettings = scope.ServiceProvider.GetRequiredService<AlgoSettingsService>();
+        var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
+        var httpFactory = scope.ServiceProvider.GetRequiredService<IHttpClientFactory>();
+
+        // ── 1. Haal actieve symbolen op ──
+        var symbols = await db.Watchlist
+            .Where(w => w.IsActive)
+            .Select(w => w.Symbol)
+            .ToListAsync(ct);
+
+        if (symbols.Count == 0)
+        {
+            _logger.LogInformation("Geen actieve symbolen in watchlist, skip scan");
+            return;
+        }
+
+        _logger.LogInformation("Scan cycle gestart: {Count} symbolen", symbols.Count);
+
+        // ── 2. Haal gewichten en thresholds op uit AlgoSettings ──
+        var techWeight = (double)await algoSettings.GetDecimalAsync("weights", "technical_weight", 0.30m);
+        var mlWeight = (double)await algoSettings.GetDecimalAsync("weights", "ml_weight", 0.25m);
+        var sentimentWeight = (double)await algoSettings.GetDecimalAsync("weights", "sentiment_weight", 0.20m);
+        var claudeWeight = (double)await algoSettings.GetDecimalAsync("weights", "claude_weight", 0.15m);
+        var fundamentalWeight = (double)await algoSettings.GetDecimalAsync("weights", "fundamental_weight", 0.10m);
+
+        var buyThreshold = (double)await algoSettings.GetDecimalAsync("thresholds", "buy_threshold", 0.65m);
+        var sellThreshold = (double)await algoSettings.GetDecimalAsync("thresholds", "sell_threshold", 0.35m);
+        var squeezeThreshold = (double)await algoSettings.GetDecimalAsync("thresholds", "squeeze_threshold", 0.80m);
+        var lookbackDays = (int)await algoSettings.GetDecimalAsync("scan", "lookback_days", 90m);
+        var minVolume = (long)await algoSettings.GetDecimalAsync("scan", "min_volume", 100000m);
+
+        var notifyBuy = await algoSettings.GetBoolAsync("notifications", "notify_buy", true);
+        var notifySell = await algoSettings.GetBoolAsync("notifications", "notify_sell", true);
+        var notifySqueeze = await algoSettings.GetBoolAsync("notifications", "notify_squeeze", true);
+
+        // ── 3. Init services ──
+        var marketProvider = await providers.GetMarketDataProvider();
+        var newsProviders = await providers.GetAllNewsProviders();
+
+        if (marketProvider == null)
+        {
+            _logger.LogWarning("Geen actieve market data provider, skip scan");
+            return;
+        }
+
+        var claudeService = new ClaudeAnalysisService(
+            httpFactory.CreateClient("claude"),
+            _config.ClaudeApiKey,
+            loggerFactory.CreateLogger<ClaudeAnalysisService>());
+
+        var telegramService = new TelegramNotificationService(
+            httpFactory.CreateClient("telegram"),
+            _config.TelegramBotToken,
+            _config.TelegramChatId,
+            loggerFactory.CreateLogger<TelegramNotificationService>());
+
+        int processed = 0, signalsGenerated = 0;
+
+        // ── 4. Scan elk symbool ──
+        foreach (var symbol in symbols)
+        {
+            try
+            {
+                ct.ThrowIfCancellationRequested();
+
+                var signal = await ScanSymbolAsync(
+                    symbol, marketProvider, newsProviders, claudeService,
+                    techWeight, mlWeight, sentimentWeight, claudeWeight, fundamentalWeight,
+                    buyThreshold, sellThreshold, squeezeThreshold,
+                    lookbackDays, minVolume, ct);
+
+                if (signal != null)
+                {
+                    await SaveSignalAsync(db, signal, ct);
+                    signalsGenerated++;
+
+                    bool shouldNotify = signal.FinalVerdict switch
+                    {
+                        "BUY" => notifyBuy,
+                        "SELL" => notifySell,
+                        "SQUEEZE" => notifySqueeze,
+                        _ => false
+                    };
+
+                    if (shouldNotify && telegramService.IsConfigured)
+                    {
+                        await telegramService.SendSignalAsync(signal, ct);
+                    }
+                }
+
+                processed++;
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Scan mislukt voor {Symbol}", symbol);
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(500), ct);
+        }
+
+        _logger.LogInformation(
+            "Scan cycle voltooid: {Processed}/{Total} symbolen verwerkt, {Signals} signalen gegenereerd",
+            processed, symbols.Count, signalsGenerated);
+    }
+
+    /// <summary>
+    /// Scan één symbool: fetch data → analyse → scoring → verdict
+    /// Retourneert null als er onvoldoende data is of geen signaal.
+    /// </summary>
+    private async Task<AiEnrichedSignal?> ScanSymbolAsync(
+        string symbol,
+        IMarketDataProvider marketProvider,
+        INewsProvider[] newsProviders,
+        ClaudeAnalysisService claudeService,
+        double techWeight, double mlWeight, double sentimentWeight,
+        double claudeWeight, double fundamentalWeight,
+        double buyThreshold, double sellThreshold, double squeezeThreshold,
+        int lookbackDays, long minVolume,
+        CancellationToken ct)
+    {
+        // ── Fetch candles ──
+        var candles = await marketProvider.GetCandles(symbol, _config.Timeframe, lookbackDays);
+        if (candles == null || candles.Length < 50)
+        {
+            _logger.LogDebug("Onvoldoende candles voor {Symbol}: {Count}", symbol, candles?.Length ?? 0);
+            return null;
+        }
+
+        // Volume check
+        var avgVolume = candles.TakeLast(20).Average(c => c.Volume);
+        if (avgVolume < minVolume)
+        {
+            _logger.LogDebug("{Symbol} volume te laag: {Vol:N0} < {Min:N0}", symbol, avgVolume, minVolume);
+            return null;
+        }
+
+        // ── Technische analyse ──
+        var indicators = IndicatorEngine.Analyze(candles);
+        var techScore = indicators.NormScore;
+
+        // ── Sentiment ──
+        double sentimentScore = 0;
+        string[] headlines = Array.Empty<string>();
+        try
+        {
+            var newsProvider = newsProviders.FirstOrDefault();
+            if (newsProvider != null)
+            {
+                sentimentScore = await newsProvider.GetSentimentScore(symbol, 7);
+                var articles = await newsProvider.GetNews(symbol, 5);
+                headlines = articles.Select(a => a.Headline).ToArray();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Sentiment ophalen mislukt voor {Symbol}", symbol);
+        }
+
+        // ── Claude AI analyse ──
+        ClaudeAssessment? claude = null;
+        if (_config.EnableClaudeAnalysis)
+        {
+            claude = await claudeService.AnalyzeAsync(symbol, indicators, sentimentScore, headlines, ct);
+        }
+
+        // ── ML probability (placeholder voor toekomstige ML-integratie) ──
+        float? mlProbability = null;
+
+        // ── Gewogen eindscore berekenen ──
+        var techNorm = (techScore + 1) / 2;
+        var sentNorm = (sentimentScore + 1) / 2;
+        var claudeNorm = claude?.Confidence ?? 0.5;
+        if (claude?.Direction == "SELL") claudeNorm = 1 - claudeNorm;
+        var fundNorm = 0.5;
+
+        double totalWeight = techWeight;
+        double weightedSum = techNorm * techWeight;
+
+        if (mlProbability.HasValue)  { totalWeight += mlWeight;          weightedSum += (mlProbability.Value) * mlWeight; }
+        if (sentimentScore != 0)     { totalWeight += sentimentWeight;   weightedSum += sentNorm * sentimentWeight; }
+        if (claude != null)          { totalWeight += claudeWeight;      weightedSum += claudeNorm * claudeWeight; }
+        totalWeight += fundamentalWeight; weightedSum += fundNorm * fundamentalWeight;
+
+        var finalScore = totalWeight > 0 ? weightedSum / totalWeight : 0.5;
+
+        // ── Verdict bepalen ──
+        string verdict;
+        string direction;
+
+        if (indicators.SqueezeDetected && finalScore >= squeezeThreshold)
+        {
+            verdict = "SQUEEZE";
+            direction = "LONG";
+        }
+        else if (finalScore >= buyThreshold)
+        {
+            verdict = "BUY";
+            direction = "LONG";
+        }
+        else if (finalScore <= sellThreshold)
+        {
+            verdict = "SELL";
+            direction = "SHORT";
+        }
+        else
+        {
+            _logger.LogDebug("{Symbol}: score {Score:F2} → HOLD (geen signaal)", symbol, finalScore);
+            return null;
+        }
+
+        var currentPrice = candles[^1].Close;
+
+        var baseSignal = new ScreenerSignal(
+            Symbol: symbol,
+            Exchange: "",
+            Direction: direction,
+            Score: techScore,
+            Price: currentPrice,
+            TrendStatus: indicators.TrendDesc,
+            MomentumStatus: indicators.MomDesc,
+            VolatilityStatus: indicators.VolDesc,
+            VolumeStatus: indicators.VolumDesc,
+            Timestamp: DateTime.UtcNow
+        );
+
+        var summary = $"{symbol}: {verdict} @ €{currentPrice:F2} " +
+                       $"(tech={techScore:F2}, sent={sentimentScore:F2}" +
+                       $"{(claude != null ? $", claude={claude.Direction}/{claude.Confidence:F2}" : "")})";
+
+        _logger.LogInformation("📊 Signaal: {Summary}", summary);
+
+        return new AiEnrichedSignal(
+            BaseSignal: baseSignal,
+            MlProbability: mlProbability,
+            SentimentScore: sentimentScore,
+            Claude: claude,
+            FinalScore: finalScore,
+            FinalVerdict: verdict,
+            Summary: summary
+        );
+    }
+
+    /// <summary>Sla een signaal op in de signals tabel.</summary>
+    private static async Task SaveSignalAsync(AppDbContext db, AiEnrichedSignal signal, CancellationToken ct)
+    {
+        db.Signals.Add(new SignalEntity
+        {
+            Symbol = signal.BaseSignal.Symbol,
+            Direction = signal.BaseSignal.Direction,
+            TechScore = signal.BaseSignal.Score,
+            MlProbability = signal.MlProbability,
+            SentimentScore = signal.SentimentScore,
+            ClaudeConfidence = signal.Claude?.Confidence,
+            ClaudeDirection = signal.Claude?.Direction,
+            ClaudeReasoning = signal.Claude?.Reasoning,
+            FinalScore = signal.FinalScore,
+            FinalVerdict = signal.FinalVerdict,
+            PriceAtSignal = signal.BaseSignal.Price,
+            TrendStatus = signal.BaseSignal.TrendStatus,
+            MomentumStatus = signal.BaseSignal.MomentumStatus,
+            VolatilityStatus = signal.BaseSignal.VolatilityStatus,
+            VolumeStatus = signal.BaseSignal.VolumeStatus,
+            Notified = false,
+            CreatedAt = DateTime.UtcNow
+        });
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Haal scan interval op uit AlgoSettings (fallback naar config).</summary>
+    private async Task<int> GetScanIntervalAsync()
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var algoSettings = scope.ServiceProvider.GetRequiredService<AlgoSettingsService>();
+            var interval = await algoSettings.GetDecimalAsync("scan", "scan_interval_minutes", _config.ScanIntervalMinutes);
+            return Math.Max(5, (int)interval);
+        }
+        catch
+        {
+            return _config.ScanIntervalMinutes;
         }
     }
 

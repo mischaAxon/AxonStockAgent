@@ -1,11 +1,6 @@
-FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine
-WORKDIR /app/src
-
-COPY AxonStockAgent.Core/AxonStockAgent.Core.csproj AxonStockAgent.Core/
-COPY AxonStockAgent.Worker/AxonStockAgent.Worker.csproj AxonStockAgent.Worker/
-RUN dotnet restore AxonStockAgent.Worker/AxonStockAgent.Worker.csproj
-
+FROM mcr.microsoft.com/dotnet/sdk:8.0
+WORKDIR /src
 COPY . .
-
-WORKDIR /app/src/AxonStockAgent.Worker
-CMD ["dotnet", "watch", "run"]
+WORKDIR /src/AxonStockAgent.Worker
+RUN dotnet restore
+ENTRYPOINT ["dotnet", "watch", "run"]
