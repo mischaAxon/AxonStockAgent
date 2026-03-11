@@ -5,7 +5,7 @@
 ### Claude Chat = Orchestrator / Architect
 - Leest de repo (via GitHub tool) om de actuele staat te begrijpen
 - Ontwerpt architectuur en schrijft gedetailleerde prompts
-- Reviewt de branch na push door te verifiëren of de code er goed uitziet
+- Reviewt code na push door te verifiëren of het er goed uitziet
 - Geeft de volgende stap / prompt
 - Schrijft handover-documenten voor sessiecontinuïteit
 - Kan direct commits pushen naar de repo (docs, handovers, prompts)
@@ -14,7 +14,7 @@
 - Ontvangt prompts van Claude Chat en voert ze uit
 - Bouwt features stap voor stap in de codebase
 - Lost compilatie-issues zelfstandig op (bv. `$$"""` fix voor .NET 8)
-- Commit naar feature branches, pusht naar GitHub
+- Commit direct naar main, pusht naar GitHub
 - Rapporteert resultaat terug aan Claude Chat
 
 ## Workflow per feature
@@ -27,22 +27,31 @@
    b. Ontwerpt de prompt met exacte code, bestandspaden, wijzigingen
    c. Levert de prompt als downloadbaar .md bestand
 4. Mischa plakt de prompt in Claude Code
-5. Claude Code bouwt alles op een feature branch
+5. Claude Code bouwt alles en commit direct naar main
 6. Mischa meldt "Done" + rapporteert eventuele fixes
-7. Claude Chat verifieert de branch via GitHub tool
-8. Merge naar main
-9. Claude Chat pusht handover + prompt-referenties naar de repo
+7. Claude Chat verifieert via GitHub tool
+8. Claude Chat pusht handover + prompt-referenties naar de repo
 ```
 
 ## Regels voor prompts
 
 1. **Eén prompt = één feature of fix** — niet te groot, niet te klein
-2. **Branch naam in de prompt** — altijd `feature/naam` of `fix/naam`
-3. **Exacte bestandspaden** — geen ambiguïteit over waar iets moet
-4. **Code blokken voor nieuwe bestanden** — Claude Code kan ze direct overnemen
-5. **Diff-instructies voor wijzigingen** — "vervang X door Y" met beide code blokken
-6. **Verificatiestappen** — `dotnet build`, `npx tsc --noEmit`, etc.
-7. **Ontwerpkeuzes toelichten** — waarom, niet alleen wat
+2. **Exacte bestandspaden** — geen ambiguïteit over waar iets moet
+3. **Code blokken voor nieuwe bestanden** — Claude Code kan ze direct overnemen
+4. **Diff-instructies voor wijzigingen** — "vervang X door Y" met beide code blokken
+5. **Verificatiestappen** — `dotnet build`, `npx tsc --noEmit`, etc.
+6. **Ontwerpkeuzes toelichten** — waarom, niet alleen wat
+
+## Branch strategie
+
+```
+main ← alles gaat direct op main
+```
+
+- **Geen feature branches** — te veel overhead bij ons tempo
+- Claude Code commit direct naar main
+- Claude Chat kan docs direct naar main pushen
+- Als iets misgaat: fix-commit erachteraan, niet reverteren
 
 ## Sessiecontinuïteit
 
@@ -65,19 +74,6 @@ We werken met een orchestrator-model: jij (Claude chat) ontwerpt en geeft mij
 prompts, ik plak ze in Claude Code die het bouwt.
 Vandaag wil ik verder met: [beschrijf wat je wilt doen]
 ```
-
-## Branch strategie
-
-```
-main (altijd stabiel, bouwt zonder fouten)
-├── feature/naam    ← nieuwe functionaliteit
-├── fix/naam        ← bugfixes of herstel
-└── docs alleen     ← mag direct op main gepusht door Claude Chat
-```
-
-- Feature branches worden **na verificatie** gemerged naar main
-- Branches worden na merge verwijderd (remote + local)
-- Geen langlevende branches — merge snel en vaak
 
 ## Tech stack referentie
 
