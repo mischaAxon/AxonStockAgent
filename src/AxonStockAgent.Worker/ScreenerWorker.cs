@@ -16,7 +16,7 @@ namespace AxonStockAgent.Worker;
 /// 1. Haal actieve symbolen uit de watchlist
 /// 2. Per symbool: fetch candles → technische analyse → sentiment → Claude AI
 /// 3. Bereken gewogen eindscore op basis van AlgoSettings
-/// 4. Sla signalen op in de database
+/// 4. Sla signalen op in de database (upsert: vervangt bestaand signaal per symbool/verdict)
 /// 5. Stuur Telegram notificaties voor relevante signalen
 /// </summary>
 public class ScreenerWorker : BackgroundService
@@ -107,6 +107,9 @@ public class ScreenerWorker : BackgroundService
         var notifySell = await algoSettings.GetBoolAsync("notifications", "notify_sell", true);
         var notifySqueeze = await algoSettings.GetBoolAsync("notifications", "notify_squeeze", true);
 
+        // Haal het dedup-window op (standaard 60 minuten)
+        var dedupWindowMinutes = (int)await algoSettings.GetDecimalAsync("scan", "signal_dedup_minutes", 60m);
+
         // ── 3. Init services ──
         var marketProvider = await providers.GetMarketDataProvider();
         var newsProviders = await providers.GetAllNewsProviders();
@@ -145,7 +148,7 @@ public class ScreenerWorker : BackgroundService
 
                 if (signal != null)
                 {
-                    await SaveSignalAsync(db, signal, ct);
+                    var isNew = await UpsertSignalAsync(db, signal, dedupWindowMinutes, ct);
                     signalsGenerated++;
 
                     bool shouldNotify = signal.FinalVerdict switch
@@ -156,7 +159,8 @@ public class ScreenerWorker : BackgroundService
                         _ => false
                     };
 
-                    if (shouldNotify && telegramService.IsConfigured)
+                    // Alleen notificatie sturen bij nieuwe signalen, niet bij updates
+                    if (isNew && shouldNotify && telegramService.IsConfigured)
                     {
                         await telegramService.SendSignalAsync(signal, ct);
                     }
@@ -315,9 +319,50 @@ public class ScreenerWorker : BackgroundService
         );
     }
 
-    /// <summary>Sla een signaal op in de signals tabel.</summary>
-    private static async Task SaveSignalAsync(AppDbContext db, AiEnrichedSignal signal, CancellationToken ct)
+    /// <summary>
+    /// Upsert een signaal: als er al een signaal bestaat voor hetzelfde symbool
+    /// en verdict binnen het dedup-window, update dat bestaande signaal.
+    /// Anders maak een nieuw signaal aan.
+    /// Retourneert true als het een nieuw signaal is, false bij update.
+    /// </summary>
+    private async Task<bool> UpsertSignalAsync(AppDbContext db, AiEnrichedSignal signal, int dedupWindowMinutes, CancellationToken ct)
     {
+        var windowStart = DateTime.UtcNow.AddMinutes(-dedupWindowMinutes);
+
+        // Zoek bestaand signaal voor hetzelfde symbool + verdict binnen het window
+        var existing = await db.Signals
+            .Where(s => s.Symbol == signal.BaseSignal.Symbol
+                        && s.FinalVerdict == signal.FinalVerdict
+                        && s.CreatedAt >= windowStart)
+            .OrderByDescending(s => s.CreatedAt)
+            .FirstOrDefaultAsync(ct);
+
+        if (existing != null)
+        {
+            // ── Update bestaand signaal ──
+            existing.Direction = signal.BaseSignal.Direction;
+            existing.TechScore = signal.BaseSignal.Score;
+            existing.MlProbability = signal.MlProbability;
+            existing.SentimentScore = signal.SentimentScore;
+            existing.ClaudeConfidence = signal.Claude?.Confidence;
+            existing.ClaudeDirection = signal.Claude?.Direction;
+            existing.ClaudeReasoning = signal.Claude?.Reasoning;
+            existing.FinalScore = signal.FinalScore;
+            existing.PriceAtSignal = signal.BaseSignal.Price;
+            existing.TrendStatus = signal.BaseSignal.TrendStatus;
+            existing.MomentumStatus = signal.BaseSignal.MomentumStatus;
+            existing.VolatilityStatus = signal.BaseSignal.VolatilityStatus;
+            existing.VolumeStatus = signal.BaseSignal.VolumeStatus;
+            // CreatedAt bewust NIET updaten — behoud originele timestamp
+
+            _logger.LogDebug("📝 Signaal geüpdatet: {Symbol} {Verdict} (id={Id})",
+                signal.BaseSignal.Symbol, signal.FinalVerdict, existing.Id);
+
+            await db.SaveChangesAsync(ct);
+            return false; // is een update, geen nieuw signaal
+        }
+
+        // ── Nieuw signaal aanmaken ──
         db.Signals.Add(new SignalEntity
         {
             Symbol = signal.BaseSignal.Symbol,
@@ -340,6 +385,7 @@ public class ScreenerWorker : BackgroundService
         });
 
         await db.SaveChangesAsync(ct);
+        return true; // is een nieuw signaal
     }
 
     /// <summary>Haal scan interval op uit AlgoSettings (fallback naar config).</summary>
