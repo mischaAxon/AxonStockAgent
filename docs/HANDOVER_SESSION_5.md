@@ -53,6 +53,12 @@ Bij het uitvoeren van de smoke test kwamen vier issues aan het licht, alle opgel
 - **`NewsService.GetTrendingSymbols()`** — zelfde patroon: anoniem type in SQL, mappen naar `TrendingSymbolDto` na `ToListAsync()`
 - **`scripts/e2e-smoke-test.sh`** — `displayName` toegevoegd aan register payload, `!` verwijderd uit wachtwoord, fundamentals test accepteert nu 404 (geldig als er geen providers geconfigureerd zijn)
 
+### 5. Worker test gestart — blocker gevonden
+- Finnhub provider geactiveerd via admin UI (API key ingevuld, enabled, health check: "Beperkt")
+- Worker logs tonen herhaald: `column w.Symbol does not exist` — hint: `Perhaps you meant to reference the column "w.symbol"`
+- **Root cause:** `UseSnakeCaseNamingConvention()` mist in zowel `Api/Program.cs` als `Worker/Program.cs` — EF genereert PascalCase kolomnamen (`"Symbol"`) terwijl PostgreSQL snake_case heeft (`symbol`)
+- **Fix prompt klaar:** `docs/prompts/05-snake-case-fix.md` — moet als eerste actie in sessie 6 worden uitgevoerd
+
 ---
 
 ## Gewijzigde bestanden (sessie 5)
@@ -76,10 +82,14 @@ Bij het uitvoeren van de smoke test kwamen vier issues aan het licht, alle opgel
 
 ---
 
-## Bekende aandachtspunten
+## Openstaande bugs
 
-1. **Fundamentals 404** — de fundamentals endpoint returnt 404 als er geen provider geconfigureerd is. Dit is verwacht gedrag maar betekent dat de StockDetailPage fundamentals sectie leeg zal zijn totdat een provider (bijv. Finnhub) is ingesteld via de admin UI.
-2. **Worker nog niet getest met echte scan** — de smoke test verifieert dat de API endpoints werken, maar de Worker (ScreenerWorker) is nog niet getest met een echte scan-cyclus. Dat vereist een geconfigureerde provider met API key.
+### BUG: Worker — UseSnakeCaseNamingConvention mist
+- **Symptoom:** Worker crash: `column w.Symbol does not exist`
+- **Oorzaak:** `UseSnakeCaseNamingConvention()` mist in `Program.cs` van zowel API als Worker
+- **Fix:** Voeg `.UseSnakeCaseNamingConvention()` toe aan `AddDbContext<AppDbContext>()` in beide `Program.cs` bestanden + controleer of NuGet package `EFCore.NamingConventions` aanwezig is
+- **Prompt:** `docs/prompts/05-snake-case-fix.md`
+- **Prioriteit:** BLOCKER — moet als eerste worden opgelost in sessie 6
 
 ---
 
@@ -99,35 +109,36 @@ Bij het uitvoeren van de smoke test kwamen vier issues aan het licht, alle opgel
 | — | E2E smoke test (19/19 pass) | ✅ (sessie 5) |
 | — | EF Core query fixes (Sector + News) | ✅ (sessie 5) |
 | — | Snake_case migrations fix | ✅ (sessie 5) |
+| — | Worker UseSnakeCaseNamingConvention | ❌ BLOCKER |
 
 ---
 
 ## Volgende stappen (sessie 6)
 
+### Prioriteit 0: Blocker fixen (EERSTE ACTIE)
+1. **Plak `docs/prompts/05-snake-case-fix.md` in Claude Code** — voegt `UseSnakeCaseNamingConvention()` toe aan API + Worker
+2. `docker compose up -d --build worker api` — herstart met fix
+3. Check worker logs: `docker compose logs -f worker`
+4. Verwacht: "Scan cycle gestart: 3 symbolen" ipv de column error
+
 ### Prioriteit 1: Worker testen met echte scan
-1. Finnhub API key configureren via admin UI
-2. Watchlist items toevoegen
-3. Worker scan-cyclus triggeren en verifiëren dat signalen gegenereerd worden
-4. Controleren dat alle pagina's data tonen
+5. Controleer dat Finnhub provider actief is (admin UI of API)
+6. Voeg `IgnoreMarketHours` toe (prompt 04, optioneel als het buiten markturen is)
+7. Verifieer dat signalen worden gegenereerd in de database
+8. Check dat frontend pagina's live data tonen
 
 ### Prioriteit 2: CI/CD
-5. GitHub Actions workflow: build + test + Docker image push
-6. Container registry setup (GitHub Container Registry of Azure ACR)
-7. Smoke test als CI stap (docker compose up → run script)
+9. GitHub Actions workflow: build + test + Docker image push
+10. Container registry setup (GitHub Container Registry of Azure ACR)
 
 ### Prioriteit 3: Azure Deployment
-8. Azure Container Apps configuratie
-9. Custom domain + SSL
-10. Environment secrets configureren
+11. Azure Container Apps configuratie
+12. Custom domain + SSL
 
 ### Prioriteit 4: Algoritme verfijning
-11. Backtesting framework
-12. Per-sector gewichten
-13. ML-model trainen op historische signalen
-
-### Prioriteit 5: Portfolio verbetering
-14. Live koersen ophalen voor echte P&L berekening
-15. Portfolio performance tracking over tijd
+13. Backtesting framework
+14. Per-sector gewichten
+15. ML-model trainen op historische signalen
 
 ---
 
@@ -142,5 +153,5 @@ Lees eerst docs/HANDOVER_SESSION_5.md en docs/CLAUDE_CODE_WORKFLOW.md in de repo
 
 We werken met een orchestrator-model: jij (Claude chat) ontwerpt en geeft mij prompts, ik plak ze in Claude Code die het bouwt. Alles gaat direct op main, geen feature branches.
 
-Vandaag wil ik verder met: [beschrijf wat je wilt doen]
+Vandaag wil ik verder met: Worker fixen en eerste echte scan draaien (zie blocker in handover)
 ```
