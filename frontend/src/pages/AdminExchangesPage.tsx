@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2, Download, Globe } from 'lucide-react';
+import { Plus, Trash2, Download, Globe, Database } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 
@@ -60,6 +60,13 @@ export default function AdminExchangesPage() {
   const queryClient = useQueryClient();
   const [importing, setImporting] = useState<number | null>(null);
   const [importingIndex, setImportingIndex] = useState<number | null>(null);
+  const [fillingIndex, setFillingIndex] = useState<number | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'warning' | 'error' } | null>(null);
+
+  function showToast(message: string, type: 'success' | 'warning' | 'error') {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 5000);
+  }
 
   // ── Exchanges ──────────────────────────────────────────────────────────────
 
@@ -127,11 +134,40 @@ export default function AdminExchangesPage() {
   async function handleImportIndex(id: number) {
     setImportingIndex(id);
     try {
-      await api.post(`/v1/admin/indices/${id}/import`, {});
+      const result = await api.post<{ data: { index: string; importedCount: number; warning?: string } }>(`/v1/admin/indices/${id}/import`, {});
       queryClient.invalidateQueries({ queryKey: ['admin', 'indices'] });
       queryClient.invalidateQueries({ queryKey: ['exchanges'] });
+      const d = result?.data;
+      if (d?.warning) {
+        showToast(d.warning, 'warning');
+      } else if (d?.importedCount > 0) {
+        showToast(`${d.index}: ${d.importedCount} componenten geïmporteerd.`, 'success');
+      } else {
+        showToast('Import mislukt: 0 componenten gevonden.', 'error');
+      }
+    } catch {
+      showToast('Import mislukt. Controleer de API logs.', 'error');
     } finally {
       setImportingIndex(null);
+    }
+  }
+
+  async function handleFillFromExchange(id: number) {
+    setFillingIndex(id);
+    try {
+      const result = await api.post<{ data: { index: string; importedCount: number } }>(`/v1/admin/indices/${id}/fill-from-exchange`, {});
+      queryClient.invalidateQueries({ queryKey: ['admin', 'indices'] });
+      queryClient.invalidateQueries({ queryKey: ['exchanges'] });
+      const d = result?.data;
+      if (d?.importedCount > 0) {
+        showToast(`${d.index}: gevuld met ${d.importedCount} symbolen van de beurs.`, 'success');
+      } else {
+        showToast('Geen symbolen gevonden. Importeer eerst de beurs.', 'error');
+      }
+    } catch (e: any) {
+      showToast(e?.message ?? 'Mislukt. Controleer of de beurs al geïmporteerd is.', 'error');
+    } finally {
+      setFillingIndex(null);
     }
   }
 
@@ -141,6 +177,17 @@ export default function AdminExchangesPage() {
 
   return (
     <div>
+      {/* Toast */}
+      {toast && (
+        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-xl text-sm font-medium max-w-sm ${
+          toast.type === 'success' ? 'bg-green-900 border border-green-600 text-green-200'
+          : toast.type === 'warning' ? 'bg-yellow-900 border border-yellow-600 text-yellow-200'
+          : 'bg-red-900 border border-red-600 text-red-200'
+        }`}>
+          {toast.message}
+        </div>
+      )}
+
       <h2 className="text-2xl font-bold text-white mb-6">Exchange Beheer</h2>
       <p className="text-sm text-gray-400 mb-6">
         Configureer welke beurzen en indexen automatisch worden geïmporteerd via EODHD.
@@ -189,11 +236,19 @@ export default function AdminExchangesPage() {
                     <div className="flex items-center justify-center gap-2">
                       <button
                         onClick={() => handleImportIndex(idx.id)}
-                        disabled={importingIndex === idx.id}
+                        disabled={importingIndex === idx.id || fillingIndex === idx.id}
                         className="p-1.5 rounded bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 transition-colors disabled:opacity-50"
-                        title="Importeer componenten"
+                        title="Importeer via EODHD (vereist Extended plan)"
                       >
                         <Download size={14} className={importingIndex === idx.id ? 'animate-bounce' : ''} />
+                      </button>
+                      <button
+                        onClick={() => handleFillFromExchange(idx.id)}
+                        disabled={fillingIndex === idx.id || importingIndex === idx.id}
+                        className="p-1.5 rounded bg-purple-500/15 text-purple-400 hover:bg-purple-500/25 transition-colors disabled:opacity-50"
+                        title={`Vul met alle symbolen van beurs '${idx.exchangeCode}'`}
+                      >
+                        <Database size={14} className={fillingIndex === idx.id ? 'animate-pulse' : ''} />
                       </button>
                       <button
                         onClick={() => { if (window.confirm(`Index ${idx.displayName} verwijderen?`)) deleteIndexMutation.mutate(idx.id); }}

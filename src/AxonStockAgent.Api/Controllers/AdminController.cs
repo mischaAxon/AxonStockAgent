@@ -295,7 +295,56 @@ public class AdminController : ControllerBase
         if (index == null) return NotFound();
 
         var count = await importService.ImportIndexComponents(id);
+        if (count == 0)
+            return Ok(new { data = new { index = index.DisplayName, importedCount = 0, warning = "EODHD fundamentals API niet beschikbaar voor dit abonnement. Gebruik 'Vul van beurs' als alternatief." } });
         return Ok(new { data = new { index = index.DisplayName, importedCount = count } });
+    }
+
+    /// <summary>
+    /// Vult een index met alle actieve MarketSymbols van de gekoppelde exchange.
+    /// Fallback wanneer EODHD fundamentals niet beschikbaar is.
+    /// </summary>
+    [HttpPost("indices/{id:int}/fill-from-exchange")]
+    public async Task<IActionResult> FillIndexFromExchange(int id)
+    {
+        var index = await _db.MarketIndices.FindAsync(id);
+        if (index == null) return NotFound();
+
+        if (string.IsNullOrEmpty(index.ExchangeCode))
+            return BadRequest(new { error = "Index heeft geen exchange code geconfigureerd." });
+
+        var symbols = await _db.MarketSymbols
+            .Where(m => m.IsActive && m.Exchange == index.ExchangeCode)
+            .ToListAsync();
+
+        if (symbols.Count == 0)
+            return BadRequest(new { error = $"Geen symbolen gevonden voor exchange '{index.ExchangeCode}'. Importeer eerst de beurs." });
+
+        var now = DateTime.UtcNow;
+
+        // Verwijder bestaande memberships
+        var existing = await _db.IndexMemberships.Where(m => m.MarketIndexId == id).ToListAsync();
+        _db.IndexMemberships.RemoveRange(existing);
+
+        // Voeg alle exchange-symbolen toe als leden
+        foreach (var sym in symbols)
+        {
+            _db.IndexMemberships.Add(new IndexMembershipEntity
+            {
+                MarketIndexId = id,
+                Symbol        = sym.Symbol,
+                Name          = sym.Name,
+                Sector        = sym.Sector,
+                Industry      = sym.Industry,
+                AddedAt       = now,
+            });
+        }
+
+        index.SymbolCount = symbols.Count;
+        index.LastImportAt = now;
+        await _db.SaveChangesAsync();
+
+        return Ok(new { data = new { index = index.DisplayName, importedCount = symbols.Count } });
     }
 }
 
