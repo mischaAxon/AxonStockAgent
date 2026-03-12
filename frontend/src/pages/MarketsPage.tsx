@@ -1,8 +1,8 @@
 import { useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search } from 'lucide-react';
-import { useAllSymbols, useBatchQuotes, useLatestSignalsPerSymbol } from '../hooks/useApi';
-import type { MarketSymbol, Quote, LatestSignalPerSymbol } from '../types';
+import { useAllSymbols, useBatchQuotes, useLatestSignalsPerSymbol, useIndicesWithSymbols } from '../hooks/useApi';
+import type { MarketSymbol, Quote, LatestSignalPerSymbol, MarketIndex } from '../types';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -20,7 +20,6 @@ function formatPrice(price: number): string {
 }
 
 function shortSymbol(symbol: string): string {
-  // Strip exchange suffix: "ASML.AS" → "ASML", "AAPL.US" → "AAPL"
   const dot = symbol.indexOf('.');
   return dot > 0 ? symbol.substring(0, dot) : symbol;
 }
@@ -102,7 +101,6 @@ function Tile({
   signal: LatestSignalPerSymbol | undefined;
   onClick: () => void;
 }) {
-  // Background color based on signal or change
   let bg = 'bg-gray-900/80';
   let border = 'border-gray-800/60';
 
@@ -134,22 +132,15 @@ function Tile({
       className={`${bg} border ${border} rounded-md p-1.5 cursor-pointer hover:brightness-125 transition-all select-none`}
       title={`${symbol.symbol} — ${symbol.name ?? ''}${signal ? ` | ${signal.finalVerdict} ${Math.round(signal.finalScore * 100)}%` : ''}`}
     >
-      {/* Symbol ticker */}
       <div className="font-mono text-[11px] font-bold text-white leading-none truncate">
         {shortSymbol(symbol.symbol)}
       </div>
-
-      {/* Price */}
       <div className="font-mono text-[10px] text-gray-300 leading-tight mt-0.5">
         {quote ? formatPrice(quote.currentPrice) : '—'}
       </div>
-
-      {/* Change % */}
       <div className={`font-mono text-[10px] font-semibold leading-tight ${changeColor}`}>
         {quote ? `${changePct > 0 ? '+' : ''}${changePct.toFixed(1)}%` : ''}
       </div>
-
-      {/* Signal indicator dot */}
       {signal && (
         <div className="flex items-center gap-0.5 mt-0.5">
           <span className={`w-1.5 h-1.5 rounded-full ${
@@ -185,7 +176,6 @@ function ExchangeColumn({
 }) {
   return (
     <div className="flex flex-col min-w-[130px]">
-      {/* Column header */}
       <div className="sticky top-0 z-10 bg-gray-950 pb-2 border-b border-gray-800 mb-2">
         <div className="flex items-center gap-1.5">
           <span className="text-sm">{countryFlag(country)}</span>
@@ -193,8 +183,6 @@ function ExchangeColumn({
         </div>
         <span className="text-[10px] text-gray-600">{symbols.length}</span>
       </div>
-
-      {/* Symbol tiles — grid of small tiles */}
       <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))' }}>
         {symbols.map(sym => (
           <Tile
@@ -216,8 +204,28 @@ export default function MarketsPage() {
   const [search, setSearch] = useState('');
   const [verdictFilter, setVerdictFilter] = useState<VerdictFilter>('');
 
-  const { data: symbolsData, isLoading } = useAllSymbols();
-  const allSymbols: MarketSymbol[] = symbolsData?.data ?? [];
+  const { data: indicesData, isLoading: indicesLoading } = useIndicesWithSymbols();
+  const { data: symbolsData, isLoading: symbolsLoading } = useAllSymbols();
+  const isLoading = indicesLoading || symbolsLoading;
+
+  const indices: MarketIndex[] = indicesData?.data ?? [];
+  const allMarketSymbols: MarketSymbol[] = symbolsData?.data ?? [];
+
+  // Combineer: alle symbolen uit indexen + alle MarketSymbols
+  const allSymbols = useMemo(() => {
+    const symbolSet = new Map<string, MarketSymbol>();
+    for (const idx of indices) {
+      for (const sym of idx.symbols) {
+        symbolSet.set(sym.symbol, sym);
+      }
+    }
+    for (const sym of allMarketSymbols) {
+      if (!symbolSet.has(sym.symbol)) {
+        symbolSet.set(sym.symbol, sym);
+      }
+    }
+    return Array.from(symbolSet.values());
+  }, [indices, allMarketSymbols]);
 
   const symbolTickers = useMemo(() => allSymbols.map(s => s.symbol), [allSymbols]);
   const { data: quotesData } = useBatchQuotes(symbolTickers);
@@ -234,56 +242,82 @@ export default function MarketsPage() {
 
   const navigate = useNavigate();
 
-  // Apply filters
-  const filtered = useMemo(() => {
-    let result = allSymbols;
-
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      result = result.filter(s =>
-        s.symbol.toLowerCase().includes(q) ||
-        shortSymbol(s.symbol).toLowerCase().includes(q) ||
-        (s.name?.toLowerCase().includes(q)) ||
-        (s.sector?.toLowerCase().includes(q))
-      );
-    }
-
-    if (verdictFilter) {
-      result = result.filter(s => {
-        const sig = signalMap[s.symbol];
-        return sig?.finalVerdict === verdictFilter;
-      });
-    }
-
-    return result;
-  }, [allSymbols, search, verdictFilter, signalMap]);
-
-  // Group by exchange, sort alphabetically within each
-  const exchangeGroups = useMemo(() => {
-    const byExchange: Record<string, { symbols: MarketSymbol[]; country: string }> = {};
-
-    for (const sym of filtered) {
-      const exchange = sym.exchange ?? 'Other';
-      if (!byExchange[exchange]) {
-        byExchange[exchange] = { symbols: [], country: sym.country ?? 'XX' };
+  // Group: indexen als kolommen, plus "Overig" voor symbolen zonder index
+  const columnGroups = useMemo(() => {
+    const indexedSymbols = new Set<string>();
+    for (const idx of indices) {
+      for (const sym of idx.symbols) {
+        indexedSymbols.add(sym.symbol);
       }
-      byExchange[exchange].symbols.push(sym);
     }
 
-    return Object.entries(byExchange)
-      .sort(([, a], [, b]) => {
-        if (a.country === 'NL' && b.country !== 'NL') return -1;
-        if (b.country === 'NL' && a.country !== 'NL') return 1;
-        if (a.country === 'US' && b.country !== 'US') return -1;
-        if (b.country === 'US' && a.country !== 'US') return 1;
-        return 0;
-      })
-      .map(([exchange, { symbols, country }]) => ({
-        exchange,
-        country,
-        symbols: symbols.sort((a, b) => shortSymbol(a.symbol).localeCompare(shortSymbol(b.symbol))),
-      }));
-  }, [filtered]);
+    type ColumnGroup = { key: string; label: string; country: string; symbols: MarketSymbol[] };
+    const groups: ColumnGroup[] = [];
+
+    // Index-kolommen
+    for (const idx of indices) {
+      let syms = idx.symbols;
+
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        syms = syms.filter(s =>
+          s.symbol.toLowerCase().includes(q) ||
+          shortSymbol(s.symbol).toLowerCase().includes(q) ||
+          (s.name?.toLowerCase().includes(q)) ||
+          (s.sector?.toLowerCase().includes(q))
+        );
+      }
+
+      if (verdictFilter) {
+        syms = syms.filter(s => signalMap[s.symbol]?.finalVerdict === verdictFilter);
+      }
+
+      if (syms.length > 0) {
+        groups.push({
+          key: idx.indexSymbol,
+          label: idx.displayName,
+          country: idx.country,
+          symbols: syms.sort((a, b) => shortSymbol(a.symbol).localeCompare(shortSymbol(b.symbol))),
+        });
+      }
+    }
+
+    // "Overig" kolommen: symbolen in MarketSymbols die in geen enkele index zitten
+    const ungrouped = allMarketSymbols.filter(s => !indexedSymbols.has(s.symbol));
+    if (ungrouped.length > 0) {
+      let filteredUngrouped = ungrouped;
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        filteredUngrouped = filteredUngrouped.filter(s =>
+          s.symbol.toLowerCase().includes(q) ||
+          shortSymbol(s.symbol).toLowerCase().includes(q) ||
+          (s.name?.toLowerCase().includes(q))
+        );
+      }
+      if (verdictFilter) {
+        filteredUngrouped = filteredUngrouped.filter(s => signalMap[s.symbol]?.finalVerdict === verdictFilter);
+      }
+
+      const byExchange: Record<string, MarketSymbol[]> = {};
+      for (const sym of filteredUngrouped) {
+        const ex = sym.exchange ?? 'Other';
+        if (!byExchange[ex]) byExchange[ex] = [];
+        byExchange[ex].push(sym);
+      }
+      for (const [ex, syms] of Object.entries(byExchange)) {
+        if (syms.length > 0) {
+          groups.push({
+            key: `other-${ex}`,
+            label: `Overig ${ex}`,
+            country: syms[0]?.country ?? 'XX',
+            symbols: syms.sort((a, b) => shortSymbol(a.symbol).localeCompare(shortSymbol(b.symbol))),
+          });
+        }
+      }
+    }
+
+    return groups;
+  }, [indices, allMarketSymbols, search, verdictFilter, signalMap]);
 
   // Counts
   const counts = useMemo(() => {
@@ -297,7 +331,6 @@ export default function MarketsPage() {
     return c;
   }, [allSymbols, signalMap]);
 
-  // Stats
   const gainers = Object.values(quotes).filter(q => q.changePercent > 0).length;
   const losers = Object.values(quotes).filter(q => q.changePercent < 0).length;
 
@@ -307,8 +340,6 @@ export default function MarketsPage() {
       <div className="flex items-center justify-between gap-3 pb-3 border-b border-gray-800 mb-3 flex-shrink-0">
         <div className="flex items-center gap-4">
           <h1 className="text-lg font-bold text-white">Markets</h1>
-
-          {/* Inline stats */}
           <div className="flex items-center gap-3 text-[11px]">
             <span className="text-gray-500">{allSymbols.length} sym</span>
             <span className="text-gray-700">|</span>
@@ -320,7 +351,6 @@ export default function MarketsPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Verdict filters — compact */}
           {([
             { key: '' as VerdictFilter, label: 'ALL', count: counts.all },
             { key: 'BUY' as VerdictFilter, label: 'BUY', count: counts.BUY },
@@ -346,13 +376,11 @@ export default function MarketsPage() {
 
           <div className="w-px h-5 bg-gray-800" />
 
-          {/* Search */}
           <SymbolSearchDropdown
             symbols={allSymbols}
             onSelect={symbol => navigate(`/stock/${symbol}`)}
           />
 
-          {/* Quick text filter input */}
           <div className="relative">
             <input
               type="text"
@@ -373,7 +401,7 @@ export default function MarketsPage() {
         </div>
       </div>
 
-      {/* Main grid area — exchanges as columns side by side */}
+      {/* Main grid area */}
       {isLoading ? (
         <div className="flex gap-4 flex-1">
           {Array.from({ length: 3 }).map((_, i) => (
@@ -387,20 +415,20 @@ export default function MarketsPage() {
             </div>
           ))}
         </div>
-      ) : exchangeGroups.length === 0 ? (
+      ) : columnGroups.length === 0 ? (
         <div className="flex-1 flex items-center justify-center">
           <p className="text-gray-500 text-sm">
             {search || verdictFilter
               ? 'Geen symbolen gevonden.'
-              : 'Geen symbolen. Ga naar Admin → Beurzen om exchanges te importeren.'}
+              : 'Geen indexen geconfigureerd. Ga naar Admin → Beurzen om indexen toe te voegen en te importeren.'}
           </p>
         </div>
       ) : (
         <div className="flex gap-4 flex-1 overflow-x-auto pb-2" style={{ scrollbarWidth: 'thin' }}>
-          {exchangeGroups.map(({ exchange, country, symbols }) => (
+          {columnGroups.map(({ key, label, country, symbols }) => (
             <ExchangeColumn
-              key={exchange}
-              exchange={exchange}
+              key={key}
+              exchange={label}
               country={country}
               symbols={symbols}
               quotes={quotes}

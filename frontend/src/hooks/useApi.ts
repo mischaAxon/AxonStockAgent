@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient, useQueries } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { api } from '../services/api';
-import type { ApiResponse, PaginatedResponse, DashboardData, Signal, WatchlistItem, PortfolioItem, NewsArticle, SectorSentiment, TrendingSymbol, CompanyFundamentals, InsiderTransaction, AlgoSettingsResponse, ExchangeInfo, MarketSymbol, Quote, LatestSignalPerSymbol } from '../types';
+import type { ApiResponse, PaginatedResponse, DashboardData, Signal, WatchlistItem, PortfolioItem, NewsArticle, SectorSentiment, TrendingSymbol, CompanyFundamentals, InsiderTransaction, AlgoSettingsResponse, ExchangeInfo, MarketSymbol, Quote, LatestSignalPerSymbol, MarketIndex } from '../types';
 
 // Dashboard
 export function useDashboard() {
@@ -303,4 +303,12 @@ export function useBatchQuotes(symbols: string[]) {
   const isLoading = queries.some(q => q.isLoading);
 
   return { data, isLoading };
+}
+
+export function useIndicesWithSymbols() {
+  return useQuery({
+    queryKey: ['exchanges', 'indices-with-symbols'],
+    queryFn: () => api.get<ApiResponse<MarketIndex[]>>('/v1/exchanges/indices-with-symbols'),
+    staleTime: 5 * 60 * 1000,
+  });
 }

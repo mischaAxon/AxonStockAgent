@@ -209,6 +209,16 @@ export interface Quote {
   timestamp: string;
 }
 
+export interface MarketIndex {
+  id: number;
+  indexSymbol: string;
+  displayName: string;
+  exchangeCode: string;
+  country: string;
+  symbolCount: number;
+  symbols: MarketSymbol[];
+}
+
 export interface LatestSignalPerSymbol {
   symbol: string;
   finalVerdict: string;

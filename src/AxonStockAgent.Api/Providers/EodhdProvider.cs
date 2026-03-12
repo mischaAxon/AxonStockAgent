@@ -454,6 +454,49 @@ public class EodhdProvider : IMarketDataProvider, INewsProvider, IFundamentalsPr
         }
     }
 
+    /// <summary>
+    /// Haalt de componenten van een index op via EODHD fundamentals API.
+    /// Bijv. "AEX.INDX" retourneert de 25 AEX-aandelen.
+    /// Response bevat Components object met per symbool: Code, Exchange, Name, Sector, Industry.
+    /// </summary>
+    public async Task<IndexComponentInfo[]> GetIndexComponents(string indexSymbol)
+    {
+        await RateLimit();
+        var url = $"{BaseUrl}/fundamentals/{indexSymbol}?api_token={_apiKey}&fmt=json&filter=Components";
+        try
+        {
+            var json = await _http.GetStringAsync(url);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            if (!root.TryGetProperty("Components", out var components))
+                return Array.Empty<IndexComponentInfo>();
+
+            var result = new List<IndexComponentInfo>();
+            foreach (var prop in components.EnumerateObject())
+            {
+                var c = prop.Value;
+                var code = SafeString(c, "Code");
+                var exchange = SafeString(c, "Exchange");
+                if (string.IsNullOrEmpty(code)) continue;
+
+                result.Add(new IndexComponentInfo(
+                    Code:     code,
+                    Exchange: exchange,
+                    Name:     SafeString(c, "Name"),
+                    Sector:   SafeString(c, "Sector"),
+                    Industry: SafeString(c, "Industry")
+                ));
+            }
+            return result.ToArray();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("EODHD GetIndexComponents mislukt voor {Index}: {Message}", indexSymbol, ex.Message);
+            return Array.Empty<IndexComponentInfo>();
+        }
+    }
+
     public async Task<PriceTarget?> GetPriceTarget(string symbol)
     {
         // EODHD combineert price target in AnalystRatings
@@ -473,3 +516,4 @@ public class EodhdProvider : IMarketDataProvider, INewsProvider, IFundamentalsPr
 }
 
 public record ExchangeSymbolInfo(string Code, string Name, string Country, string Exchange, string Currency, string Type);
+public record IndexComponentInfo(string Code, string Exchange, string Name, string Sector, string Industry);

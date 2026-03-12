@@ -243,6 +243,60 @@ public class AdminController : ControllerBase
         var count = await importService.ImportExchangeSymbols(exchange.ExchangeCode);
         return Ok(new { data = new { exchange = exchange.ExchangeCode, importedCount = count } });
     }
+
+    // ── Market Indices ────────────────────────────────────────────────────────
+
+    [HttpGet("indices")]
+    public async Task<IActionResult> GetIndices()
+    {
+        var indices = await _db.MarketIndices
+            .OrderBy(i => i.Country)
+            .ThenBy(i => i.DisplayName)
+            .ToListAsync();
+        return Ok(new { data = indices });
+    }
+
+    [HttpPost("indices")]
+    public async Task<IActionResult> AddIndex([FromBody] AddIndexRequest request)
+    {
+        var exists = await _db.MarketIndices.AnyAsync(i => i.IndexSymbol == request.IndexSymbol);
+        if (exists) return Conflict(new { error = $"Index '{request.IndexSymbol}' bestaat al" });
+
+        var entity = new MarketIndexEntity
+        {
+            IndexSymbol  = request.IndexSymbol,
+            DisplayName  = request.DisplayName ?? request.IndexSymbol,
+            ExchangeCode = request.ExchangeCode ?? "",
+            Country      = request.Country ?? "XX",
+            IsEnabled    = true,
+        };
+        _db.MarketIndices.Add(entity);
+        await _db.SaveChangesAsync();
+        return Ok(new { data = entity });
+    }
+
+    [HttpDelete("indices/{id:int}")]
+    public async Task<IActionResult> DeleteIndex(int id)
+    {
+        var index = await _db.MarketIndices.FindAsync(id);
+        if (index == null) return NotFound();
+
+        var memberships = await _db.IndexMemberships.Where(m => m.MarketIndexId == id).ToListAsync();
+        _db.IndexMemberships.RemoveRange(memberships);
+        _db.MarketIndices.Remove(index);
+        await _db.SaveChangesAsync();
+        return Ok(new { message = $"Index '{index.DisplayName}' verwijderd" });
+    }
+
+    [HttpPost("indices/{id:int}/import")]
+    public async Task<IActionResult> ImportIndexComponents(int id, [FromServices] IndexImportService importService)
+    {
+        var index = await _db.MarketIndices.FindAsync(id);
+        if (index == null) return NotFound();
+
+        var count = await importService.ImportIndexComponents(id);
+        return Ok(new { data = new { index = index.DisplayName, importedCount = count } });
+    }
 }
 
 public record UpdateUserRequest(string? Role = null, bool? IsActive = null);
@@ -250,3 +304,4 @@ public record UpdateProviderRequest(bool? IsEnabled = null, string? ApiKey = nul
 public record UpdateSettingRequest(string Value);
 public record AddExchangeRequest(string ExchangeCode, string? DisplayName = null, string? Country = null);
 public record UpdateExchangeRequest(bool? IsEnabled = null, string? DisplayName = null);
+public record AddIndexRequest(string IndexSymbol, string? DisplayName = null, string? ExchangeCode = null, string? Country = null);

@@ -22,6 +22,8 @@ public class AppDbContext : DbContext
     public DbSet<ClaudeApiLogEntity> ClaudeApiLogs => Set<ClaudeApiLogEntity>();
     public DbSet<MarketSymbolEntity> MarketSymbols { get; set; }
     public DbSet<TrackedExchangeEntity> TrackedExchanges { get; set; }
+    public DbSet<MarketIndexEntity> MarketIndices { get; set; }
+    public DbSet<IndexMembershipEntity> IndexMemberships { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -175,6 +177,31 @@ public class AppDbContext : DbContext
             e.Property(x => x.ExchangeCode).HasMaxLength(20);
             e.Property(x => x.DisplayName).HasMaxLength(100);
             e.Property(x => x.Country).HasMaxLength(100);
+        });
+
+        // MarketIndices
+        modelBuilder.Entity<MarketIndexEntity>(e =>
+        {
+            e.ToTable("market_indices");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.IndexSymbol).IsUnique();
+            e.Property(x => x.IndexSymbol).HasMaxLength(30);
+            e.Property(x => x.DisplayName).HasMaxLength(100);
+            e.Property(x => x.ExchangeCode).HasMaxLength(20);
+            e.Property(x => x.Country).HasMaxLength(5);
+        });
+
+        // IndexMemberships
+        modelBuilder.Entity<IndexMembershipEntity>(e =>
+        {
+            e.ToTable("index_memberships");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.MarketIndexId, x.Symbol }).IsUnique();
+            e.HasOne(x => x.MarketIndex).WithMany().HasForeignKey(x => x.MarketIndexId).OnDelete(DeleteBehavior.Cascade);
+            e.Property(x => x.Symbol).HasMaxLength(50);
+            e.Property(x => x.Name).HasMaxLength(200);
+            e.Property(x => x.Sector).HasMaxLength(100);
+            e.Property(x => x.Industry).HasMaxLength(100);
         });
     }
 }

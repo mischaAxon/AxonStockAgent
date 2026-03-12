@@ -94,4 +94,47 @@ public class ExchangesController : ControllerBase
 
         return Ok(new { data = symbols });
     }
+
+    /// <summary>
+    /// Retourneert alle actieve indexen met hun componenten-symbolen.
+    /// Dit is wat de frontend gebruikt om het Markets-scherm per index te groeperen.
+    /// </summary>
+    [HttpGet("indices-with-symbols")]
+    public async Task<IActionResult> GetIndicesWithSymbols()
+    {
+        var indices = await _db.MarketIndices
+            .Where(i => i.IsEnabled)
+            .OrderBy(i => i.Country)
+            .ThenBy(i => i.DisplayName)
+            .Select(i => new
+            {
+                i.Id,
+                i.IndexSymbol,
+                i.DisplayName,
+                i.ExchangeCode,
+                i.Country,
+                i.SymbolCount,
+                Symbols = _db.IndexMemberships
+                    .Where(m => m.MarketIndexId == i.Id)
+                    .Join(_db.MarketSymbols.Where(ms => ms.IsActive),
+                        m => m.Symbol,
+                        ms => ms.Symbol,
+                        (m, ms) => new
+                        {
+                            ms.Symbol,
+                            ms.Name,
+                            ms.Exchange,
+                            ms.Sector,
+                            ms.Industry,
+                            ms.Country,
+                            ms.Logo,
+                            ms.MarketCap
+                        })
+                    .OrderBy(s => s.Symbol)
+                    .ToList()
+            })
+            .ToListAsync();
+
+        return Ok(new { data = indices });
+    }
 }
