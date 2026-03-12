@@ -43,6 +43,13 @@ public class AppDbContext : DbContext
             e.HasIndex(x => x.CreatedAt);
             e.HasIndex(x => x.FinalVerdict);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+            // EF snake_case converts PriceAfter1d → price_after1d but DB has price_after_1d
+            e.Property(x => x.PriceAfter1d).HasColumnName("price_after_1d");
+            e.Property(x => x.PriceAfter5d).HasColumnName("price_after_5d");
+            e.Property(x => x.PriceAfter20d).HasColumnName("price_after_20d");
+            e.Property(x => x.ReturnPct1d).HasColumnName("return_pct_1d");
+            e.Property(x => x.ReturnPct5d).HasColumnName("return_pct_5d");
+            e.Property(x => x.ReturnPct20d).HasColumnName("return_pct_20d");
         });
 
         modelBuilder.Entity<PortfolioItem>(e =>
