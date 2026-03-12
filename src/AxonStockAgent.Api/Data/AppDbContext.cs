@@ -24,6 +24,7 @@ public class AppDbContext : DbContext
     public DbSet<TrackedExchangeEntity> TrackedExchanges { get; set; }
     public DbSet<MarketIndexEntity> MarketIndices { get; set; }
     public DbSet<IndexMembershipEntity> IndexMemberships { get; set; }
+    public DbSet<FavoriteEntity> Favorites => Set<FavoriteEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -202,6 +203,17 @@ public class AppDbContext : DbContext
             e.Property(x => x.Name).HasMaxLength(200);
             e.Property(x => x.Sector).HasMaxLength(100);
             e.Property(x => x.Industry).HasMaxLength(100);
+        });
+
+        // UserFavorites
+        modelBuilder.Entity<FavoriteEntity>(e =>
+        {
+            e.ToTable("user_favorites");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.UserId, x.Symbol }).IsUnique();
+            e.Property(x => x.UserId).HasColumnName("user_id").HasMaxLength(100);
+            e.Property(x => x.Symbol).HasColumnName("symbol").HasMaxLength(50);
+            e.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("NOW()");
         });
     }
 }

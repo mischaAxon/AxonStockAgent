@@ -312,3 +312,21 @@ export function useIndicesWithSymbols() {
     staleTime: 5 * 60 * 1000,
   });
 }
+
+// Favorites
+export function useFavorites() {
+  return useQuery({
+    queryKey: ['favorites'],
+    queryFn: () => api.get<ApiResponse<string[]>>('/v1/favorites'),
+    staleTime: 30_000,
+  });
+}
+
+export function useToggleFavorite() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (symbol: string) =>
+      api.post<{ data: { symbol: string; isFavorite: boolean } }>(`/v1/favorites/${symbol}`, {}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['favorites'] }),
+  });
+}

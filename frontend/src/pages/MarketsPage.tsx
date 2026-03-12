@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search } from 'lucide-react';
-import { useAllSymbols, useBatchQuotes, useLatestSignalsPerSymbol, useIndicesWithSymbols } from '../hooks/useApi';
+import { Search, Star } from 'lucide-react';
+import { useAllSymbols, useBatchQuotes, useLatestSignalsPerSymbol, useIndicesWithSymbols, useFavorites, useToggleFavorite } from '../hooks/useApi';
 import type { MarketSymbol, Quote, LatestSignalPerSymbol, MarketIndex } from '../types';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -24,7 +24,7 @@ function shortSymbol(symbol: string): string {
   return dot > 0 ? symbol.substring(0, dot) : symbol;
 }
 
-type VerdictFilter = '' | 'BUY' | 'SELL' | 'SQUEEZE';
+type VerdictFilter = '' | 'BUY' | 'SELL' | 'SQUEEZE' | 'FAV';
 
 // ── SymbolSearchDropdown ─────────────────────────────────────────────────────
 
@@ -95,11 +95,15 @@ function Tile({
   quote,
   signal,
   onClick,
+  isFavorite,
+  onToggleFavorite,
 }: {
   symbol: MarketSymbol;
   quote: Quote | undefined;
   signal: LatestSignalPerSymbol | undefined;
   onClick: () => void;
+  isFavorite: boolean;
+  onToggleFavorite: () => void;
 }) {
   let bg = 'bg-gray-900/80';
   let border = 'border-gray-800/60';
@@ -129,9 +133,17 @@ function Tile({
   return (
     <div
       onClick={onClick}
-      className={`${bg} border ${border} rounded-md p-1.5 cursor-pointer hover:brightness-125 transition-all select-none`}
+      className={`${bg} border ${border} rounded-md p-1.5 cursor-pointer hover:brightness-125 transition-all select-none group relative`}
       title={`${symbol.symbol} — ${symbol.name ?? ''}${signal ? ` | ${signal.finalVerdict} ${Math.round(signal.finalScore * 100)}%` : ''}`}
     >
+      <button
+        onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
+        className={`absolute top-0.5 right-0.5 p-0.5 rounded transition-all z-10 ${
+          isFavorite ? 'text-yellow-400 opacity-100' : 'text-gray-600 opacity-0 group-hover:opacity-60 hover:!opacity-100'
+        }`}
+      >
+        <Star size={10} fill={isFavorite ? 'currentColor' : 'none'} />
+      </button>
       <div className="font-mono text-[11px] font-bold text-white leading-none truncate">
         {shortSymbol(symbol.symbol)}
       </div>
@@ -166,6 +178,8 @@ function ExchangeColumn({
   quotes,
   signalMap,
   onSymbolClick,
+  favoriteSet,
+  onToggleFavorite,
 }: {
   exchange: string;
   country: string;
@@ -173,6 +187,8 @@ function ExchangeColumn({
   quotes: Record<string, Quote>;
   signalMap: Record<string, LatestSignalPerSymbol>;
   onSymbolClick: (symbol: string) => void;
+  favoriteSet: Set<string>;
+  onToggleFavorite: (symbol: string) => void;
 }) {
   return (
     <div className="flex flex-col min-w-[130px]">
@@ -191,6 +207,8 @@ function ExchangeColumn({
             quote={quotes[sym.symbol]}
             signal={signalMap[sym.symbol]}
             onClick={() => onSymbolClick(sym.symbol)}
+            isFavorite={favoriteSet.has(sym.symbol)}
+            onToggleFavorite={() => onToggleFavorite(sym.symbol)}
           />
         ))}
       </div>
@@ -240,6 +258,13 @@ export default function MarketsPage() {
     return map;
   }, [signalsData]);
 
+  const { data: favoritesData } = useFavorites();
+  const toggleFavorite = useToggleFavorite();
+
+  const favoriteSet = useMemo(() => {
+    return new Set<string>(favoritesData?.data ?? []);
+  }, [favoritesData]);
+
   const navigate = useNavigate();
 
   // Group: indexen als kolommen, plus "Overig" voor symbolen zonder index
@@ -269,7 +294,11 @@ export default function MarketsPage() {
       }
 
       if (verdictFilter) {
-        syms = syms.filter(s => signalMap[s.symbol]?.finalVerdict === verdictFilter);
+        if (verdictFilter === 'FAV') {
+          syms = syms.filter(s => favoriteSet.has(s.symbol));
+        } else {
+          syms = syms.filter(s => signalMap[s.symbol]?.finalVerdict === verdictFilter);
+        }
       }
 
       if (syms.length > 0) {
@@ -295,7 +324,11 @@ export default function MarketsPage() {
         );
       }
       if (verdictFilter) {
-        filteredUngrouped = filteredUngrouped.filter(s => signalMap[s.symbol]?.finalVerdict === verdictFilter);
+        if (verdictFilter === 'FAV') {
+          filteredUngrouped = filteredUngrouped.filter(s => favoriteSet.has(s.symbol));
+        } else {
+          filteredUngrouped = filteredUngrouped.filter(s => signalMap[s.symbol]?.finalVerdict === verdictFilter);
+        }
       }
 
       const byExchange: Record<string, MarketSymbol[]> = {};
@@ -317,7 +350,7 @@ export default function MarketsPage() {
     }
 
     return groups;
-  }, [indices, allMarketSymbols, search, verdictFilter, signalMap]);
+  }, [indices, allMarketSymbols, search, verdictFilter, signalMap, favoriteSet]);
 
   // Counts
   const counts = useMemo(() => {
@@ -353,6 +386,7 @@ export default function MarketsPage() {
         <div className="flex items-center gap-2">
           {([
             { key: '' as VerdictFilter, label: 'ALL', count: counts.all },
+            { key: 'FAV' as VerdictFilter, label: '★ FAV', count: favoriteSet.size },
             { key: 'BUY' as VerdictFilter, label: 'BUY', count: counts.BUY },
             { key: 'SELL' as VerdictFilter, label: 'SELL', count: counts.SELL },
             { key: 'SQUEEZE' as VerdictFilter, label: 'SQZ', count: counts.SQUEEZE },
@@ -365,6 +399,7 @@ export default function MarketsPage() {
                   ? key === 'BUY' ? 'bg-green-500/20 text-green-400 ring-1 ring-green-500/50'
                     : key === 'SELL' ? 'bg-red-500/20 text-red-400 ring-1 ring-red-500/50'
                     : key === 'SQUEEZE' ? 'bg-yellow-500/20 text-yellow-400 ring-1 ring-yellow-500/50'
+                    : key === 'FAV' ? 'bg-yellow-500/20 text-yellow-400 ring-1 ring-yellow-500/50'
                     : 'bg-gray-700 text-white ring-1 ring-gray-600'
                   : 'bg-gray-900 text-gray-500 hover:text-gray-300'
               }`}
@@ -434,6 +469,8 @@ export default function MarketsPage() {
               quotes={quotes}
               signalMap={signalMap}
               onSymbolClick={symbol => navigate(`/stock/${symbol}`)}
+              favoriteSet={favoriteSet}
+              onToggleFavorite={(symbol) => toggleFavorite.mutate(symbol)}
             />
           ))}
         </div>
