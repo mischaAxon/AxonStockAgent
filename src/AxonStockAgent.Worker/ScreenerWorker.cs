@@ -185,7 +185,8 @@ public class ScreenerWorker : BackgroundService
         var claudeService = new ClaudeAnalysisService(
             httpFactory.CreateClient("claude"),
             _config.ClaudeApiKey,
-            loggerFactory.CreateLogger<ClaudeAnalysisService>());
+            loggerFactory.CreateLogger<ClaudeAnalysisService>(),
+            _scopeFactory);
 
         var telegramService = new TelegramNotificationService(
             httpFactory.CreateClient("telegram"),

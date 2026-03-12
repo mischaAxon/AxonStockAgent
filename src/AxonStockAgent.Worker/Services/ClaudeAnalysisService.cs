@@ -1,20 +1,25 @@
+using System.Diagnostics;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using AxonStockAgent.Api.Data;
+using AxonStockAgent.Api.Data.Entities;
 using AxonStockAgent.Core.Models;
 
 namespace AxonStockAgent.Worker.Services;
 
 /// <summary>
 /// Roept Claude API aan voor AI-verrijking van signalen.
-/// Stuurt technische indicatoren, sentiment en recente headlines mee.
-/// Parseert het antwoord als een gestructureerd JSON-assessment.
+/// Logt elke interactie (succes én falen) naar de claude_api_logs tabel.
 /// </summary>
 public class ClaudeAnalysisService
 {
     private readonly HttpClient _http;
     private readonly string _apiKey;
     private readonly ILogger<ClaudeAnalysisService> _logger;
+    private readonly IServiceScopeFactory? _scopeFactory;
+
+    private const string Model = "claude-sonnet-4-20250514";
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -22,11 +27,16 @@ public class ClaudeAnalysisService
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
-    public ClaudeAnalysisService(HttpClient http, string apiKey, ILogger<ClaudeAnalysisService> logger)
+    public ClaudeAnalysisService(
+        HttpClient http,
+        string apiKey,
+        ILogger<ClaudeAnalysisService> logger,
+        IServiceScopeFactory? scopeFactory = null)
     {
         _http = http;
         _apiKey = apiKey;
         _logger = logger;
+        _scopeFactory = scopeFactory;
     }
 
     /// <summary>
@@ -46,13 +56,17 @@ public class ClaudeAnalysisService
             return null;
         }
 
+        var sw = Stopwatch.StartNew();
+        string? rawText = null;
+        int? httpStatus = null;
+
         try
         {
             var prompt = BuildPrompt(symbol, indicators, sentimentScore, recentHeadlines);
 
             var request = new
             {
-                model = "claude-sonnet-4-20250514",
+                model = Model,
                 max_tokens = 500,
                 messages = new[]
                 {
@@ -68,30 +82,104 @@ public class ClaudeAnalysisService
             httpRequest.Headers.Add("anthropic-version", "2023-06-01");
 
             var response = await _http.SendAsync(httpRequest, ct);
+            httpStatus = (int)response.StatusCode;
 
             if (!response.IsSuccessStatusCode)
             {
                 var errorBody = await response.Content.ReadAsStringAsync(ct);
+                sw.Stop();
                 _logger.LogWarning("Claude API error {Status} voor {Symbol}: {Error}",
                     response.StatusCode, symbol, errorBody);
+
+                await LogInteractionAsync(symbol, "api_error", httpStatus, null, null,
+                    $"{response.StatusCode}: {Truncate(errorBody, 400)}", null, (int)sw.ElapsedMilliseconds);
                 return null;
             }
 
             var result = await response.Content.ReadFromJsonAsync<ClaudeApiResponse>(JsonOptions, ct);
-            var text = result?.Content?.FirstOrDefault()?.Text;
+            rawText = result?.Content?.FirstOrDefault()?.Text;
 
-            if (string.IsNullOrEmpty(text))
+            if (string.IsNullOrEmpty(rawText))
             {
+                sw.Stop();
                 _logger.LogWarning("Leeg antwoord van Claude voor {Symbol}", symbol);
+
+                await LogInteractionAsync(symbol, "empty_response", httpStatus, null, null,
+                    "Response content was empty or null", null, (int)sw.ElapsedMilliseconds);
                 return null;
             }
 
-            return ParseAssessment(text, symbol);
+            var assessment = ParseAssessment(rawText, symbol);
+            sw.Stop();
+
+            if (assessment == null)
+            {
+                await LogInteractionAsync(symbol, "parse_error", httpStatus, null, null,
+                    "JSON parse failed", Truncate(rawText, 500), (int)sw.ElapsedMilliseconds);
+                return null;
+            }
+
+            // Success!
+            await LogInteractionAsync(symbol, "success", httpStatus, assessment.Direction,
+                assessment.Confidence, null, null, (int)sw.ElapsedMilliseconds);
+
+            return assessment;
+        }
+        catch (TaskCanceledException)
+        {
+            sw.Stop();
+            await LogInteractionAsync(symbol, "timeout", httpStatus, null, null,
+                "Request was cancelled or timed out", null, (int)sw.ElapsedMilliseconds);
+            return null;
         }
         catch (Exception ex)
         {
+            sw.Stop();
             _logger.LogError(ex, "Claude analyse mislukt voor {Symbol}", symbol);
+
+            await LogInteractionAsync(symbol, "unknown", httpStatus, null, null,
+                Truncate(ex.Message, 500), Truncate(rawText, 500), (int)sw.ElapsedMilliseconds);
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Log een Claude API interactie naar de database.
+    /// Fire-and-forget met eigen scope — mag de scan niet vertragen.
+    /// </summary>
+    private async Task LogInteractionAsync(
+        string symbol, string status, int? httpStatusCode,
+        string? direction, double? confidence,
+        string? errorMessage, string? rawResponseSnippet,
+        int durationMs)
+    {
+        if (_scopeFactory == null) return; // graceful als geen DI beschikbaar
+
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+            db.ClaudeApiLogs.Add(new ClaudeApiLogEntity
+            {
+                Symbol = symbol,
+                Status = status,
+                HttpStatusCode = httpStatusCode,
+                Direction = direction,
+                Confidence = confidence,
+                ErrorMessage = errorMessage,
+                RawResponseSnippet = rawResponseSnippet,
+                DurationMs = durationMs,
+                Model = Model,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            await db.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            // Logging mag nooit de scan laten crashen
+            _logger.LogDebug(ex, "Kon Claude API log niet opslaan voor {Symbol}", symbol);
         }
     }
 
@@ -162,6 +250,9 @@ public class ClaudeAnalysisService
             return null;
         }
     }
+
+    private static string? Truncate(string? value, int maxLength) =>
+        value == null ? null : value.Length <= maxLength ? value : value[..maxLength];
 
     // ── Response DTOs ──────────────────────────────────────────────────────────
 

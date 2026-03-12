@@ -334,6 +334,25 @@ CREATE TABLE IF NOT EXISTS insider_transactions (
 CREATE INDEX IF NOT EXISTS idx_insider_symbol ON insider_transactions(symbol);
 CREATE INDEX IF NOT EXISTS idx_insider_date   ON insider_transactions(transaction_date DESC);
 
+-- Prompt 11: Claude API interaction logging
+CREATE TABLE IF NOT EXISTS claude_api_logs (
+    id                    SERIAL PRIMARY KEY,
+    symbol                VARCHAR(20)  NOT NULL,
+    status                VARCHAR(20)  NOT NULL,
+    http_status_code      INTEGER,
+    direction             VARCHAR(10),
+    confidence            DOUBLE PRECISION,
+    error_message         VARCHAR(500),
+    raw_response_snippet  VARCHAR(500),
+    duration_ms           INTEGER NOT NULL DEFAULT 0,
+    model                 VARCHAR(50),
+    created_at            TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_claude_logs_symbol  ON claude_api_logs(symbol);
+CREATE INDEX IF NOT EXISTS idx_claude_logs_status  ON claude_api_logs(status);
+CREATE INDEX IF NOT EXISTS idx_claude_logs_created ON claude_api_logs(created_at DESC);
+
 -- EF Core migrations history: mark all migrations as applied so EF doesn't re-run them
 -- UseSnakeCaseNamingConvention() converts column names to snake_case
 CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory" (

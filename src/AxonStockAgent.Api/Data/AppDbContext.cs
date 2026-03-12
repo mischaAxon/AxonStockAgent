@@ -19,6 +19,7 @@ public class AppDbContext : DbContext
     public DbSet<CompanyFundamentalsEntity> CompanyFundamentals => Set<CompanyFundamentalsEntity>();
     public DbSet<InsiderTransactionEntity> InsiderTransactions => Set<InsiderTransactionEntity>();
     public DbSet<AlgoSettingsEntity> AlgoSettings => Set<AlgoSettingsEntity>();
+    public DbSet<ClaudeApiLogEntity> ClaudeApiLogs => Set<ClaudeApiLogEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -125,6 +126,16 @@ public class AppDbContext : DbContext
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.Category, x.Key }).IsUnique();
             e.Property(x => x.UpdatedAt).HasDefaultValueSql("NOW()");
+        });
+
+        modelBuilder.Entity<ClaudeApiLogEntity>(e =>
+        {
+            e.ToTable("claude_api_logs");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.Symbol);
+            e.HasIndex(x => x.Status);
+            e.HasIndex(x => x.CreatedAt);
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
         });
     }
 }
