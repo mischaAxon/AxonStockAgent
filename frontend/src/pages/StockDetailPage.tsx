@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, RefreshCw, ExternalLink } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { useFundamentals, useInsiderTransactions, useWatchlist, useSignals, useNewsBySymbol } from '../hooks/useApi';
+import { useFundamentals, useInsiderTransactions, useWatchlist, useSignals, useNewsBySymbol, useBatchQuotes } from '../hooks/useApi';
 import type { CompanyFundamentals, InsiderTransaction, Signal, NewsArticle } from '../types';
 import { relativeTime } from '../utils/formatTime';
 import { VerdictBadge, ScoreBar } from '../components/shared';
@@ -236,6 +236,8 @@ export default function StockDetailPage() {
   const { data: insidersData, isLoading: insidersLoading } = useInsiderTransactions(upperSymbol);
   const { data: signalsData,  isLoading: signalsLoading }  = useSignals(1, 10, upperSymbol);
   const { data: newsData }        = useNewsBySymbol(upperSymbol);
+  const { data: quoteData }       = useBatchQuotes([upperSymbol]);
+  const quote = quoteData?.data?.[upperSymbol];
 
   const watchlistItem = watchlistData?.data?.find(w => w.symbol === upperSymbol);
   const fund: CompanyFundamentals | undefined = fundData?.data;
@@ -316,6 +318,62 @@ export default function StockDetailPage() {
           </button>
         </div>
       </div>
+
+      {/* ── Live Price ──────────────────────────────────────────────────────── */}
+      {quote && (
+        <div className="flex items-center gap-4 bg-gray-900 border border-gray-800 rounded-xl px-5 py-3">
+          <div>
+            <p className="text-xs text-gray-500 mb-0.5">Live Prijs</p>
+            <p className="text-3xl font-bold font-mono text-white">
+              {quote.currentPrice >= 1000
+                ? quote.currentPrice.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                : quote.currentPrice.toFixed(2)}
+            </p>
+          </div>
+          <div className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-semibold ${
+            quote.changePercent > 0
+              ? 'bg-green-500/15 text-green-400'
+              : quote.changePercent < 0
+                ? 'bg-red-500/15 text-red-400'
+                : 'bg-gray-800 text-gray-400'
+          }`}>
+            {quote.changePercent > 0 ? '▲' : quote.changePercent < 0 ? '▼' : '—'}
+            {' '}
+            {quote.changePercent > 0 ? '+' : ''}{quote.changePercent.toFixed(2)}%
+            <span className="text-xs opacity-70 ml-1">
+              ({quote.change > 0 ? '+' : ''}{quote.change.toFixed(2)})
+            </span>
+          </div>
+          <div className="ml-auto flex gap-6 text-xs text-gray-500">
+            <div>
+              <span className="block text-gray-600">Open</span>
+              <span className="text-gray-300 font-mono">{quote.open.toFixed(2)}</span>
+            </div>
+            <div>
+              <span className="block text-gray-600">High</span>
+              <span className="text-green-400/70 font-mono">{quote.high.toFixed(2)}</span>
+            </div>
+            <div>
+              <span className="block text-gray-600">Low</span>
+              <span className="text-red-400/70 font-mono">{quote.low.toFixed(2)}</span>
+            </div>
+            <div>
+              <span className="block text-gray-600">Prev Close</span>
+              <span className="text-gray-300 font-mono">{quote.previousClose.toFixed(2)}</span>
+            </div>
+            <div>
+              <span className="block text-gray-600">Volume</span>
+              <span className="text-gray-300 font-mono">
+                {quote.volume >= 1e6
+                  ? (quote.volume / 1e6).toFixed(1) + 'M'
+                  : quote.volume >= 1e3
+                    ? (quote.volume / 1e3).toFixed(0) + 'K'
+                    : quote.volume.toLocaleString()}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Quick Stats Banner ─────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

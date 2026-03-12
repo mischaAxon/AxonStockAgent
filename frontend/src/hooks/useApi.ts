@@ -1,4 +1,5 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, useQueries } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { api } from '../services/api';
 import type { ApiResponse, PaginatedResponse, DashboardData, Signal, WatchlistItem, PortfolioItem, NewsArticle, SectorSentiment, TrendingSymbol, CompanyFundamentals, InsiderTransaction, AlgoSettingsResponse, ExchangeInfo, MarketSymbol, Quote } from '../types';
 
@@ -260,12 +261,37 @@ export function useAllSymbols(country?: string) {
 }
 
 export function useBatchQuotes(symbols: string[]) {
-  const symbolStr = symbols.join(',');
-  return useQuery({
-    queryKey: ['quotes', symbolStr],
-    queryFn: () => api.get<ApiResponse<Record<string, Quote>>>(`/v1/quotes/batch?symbols=${symbolStr}`),
-    enabled: symbols.length > 0,
-    refetchInterval: 30_000,
-    staleTime: 15_000,
+  // Split in chunks van max 50 voor de batch API
+  const chunks = useMemo(() => {
+    const result: string[][] = [];
+    for (let i = 0; i < symbols.length; i += 50) {
+      result.push(symbols.slice(i, i + 50));
+    }
+    return result;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [symbols.join(',')]);
+
+  const queries = useQueries({
+    queries: chunks.map((chunk, index) => ({
+      queryKey: ['quotes', 'batch', index, chunk.join(',')],
+      queryFn: () => api.get<ApiResponse<Record<string, Quote>>>(`/v1/quotes/batch?symbols=${chunk.join(',')}`),
+      enabled: chunk.length > 0,
+      refetchInterval: 30_000,
+      staleTime: 15_000,
+    })),
   });
+
+  const data = useMemo(() => {
+    const merged: Record<string, Quote> = {};
+    for (const query of queries) {
+      if (query.data?.data) {
+        Object.assign(merged, query.data.data);
+      }
+    }
+    return { data: merged };
+  }, [queries]);
+
+  const isLoading = queries.some(q => q.isLoading);
+
+  return { data, isLoading };
 }

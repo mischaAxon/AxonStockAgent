@@ -51,6 +51,9 @@ builder.Services.AddCors(options =>
 // HTTP client factory (gebruikt door ProviderManager)
 builder.Services.AddHttpClient();
 
+// In-memory cache (voor QuoteCacheService)
+builder.Services.AddMemoryCache(options => { options.SizeLimit = 10_000; });
+
 // Controllers + Swagger
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -70,6 +73,7 @@ builder.Services.AddScoped<AlgoSettingsService>();
 builder.Services.AddHostedService<NewsFetcherService>();
 builder.Services.AddScoped<SignalOutcomeService>();
 builder.Services.AddHostedService<OutcomeTrackerService>();
+builder.Services.AddScoped<QuoteCacheService>();
 
 var app = builder.Build();
 

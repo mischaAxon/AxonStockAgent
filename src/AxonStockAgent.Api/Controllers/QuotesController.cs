@@ -9,14 +9,13 @@ namespace AxonStockAgent.Api.Controllers;
 [Route("api/v1/[controller]")]
 public class QuotesController : ControllerBase
 {
-    private readonly ProviderManager _providers;
+    private readonly QuoteCacheService _quoteCache;
 
-    public QuotesController(ProviderManager providers) => _providers = providers;
+    public QuotesController(QuoteCacheService quoteCache) => _quoteCache = quoteCache;
 
     /// <summary>
-    /// Haal quotes op voor meerdere symbolen tegelijk.
-    /// Returns current price, change %, previous close.
-    /// Max 50 symbolen per call.
+    /// Haal quotes op voor meerdere symbolen tegelijk (max 50 per call).
+    /// Quotes worden 30 seconden gecacht.
     /// </summary>
     [HttpGet("batch")]
     public async Task<IActionResult> GetBatchQuotes([FromQuery] string symbols)
@@ -31,26 +30,21 @@ public class QuotesController : ControllerBase
             .Take(50)
             .ToArray();
 
-        var results = new Dictionary<string, object>();
-
-        var tasks = symbolList.Select(async symbol =>
-        {
-            try
-            {
-                var quote = await _providers.GetQuote(symbol);
-                if (quote != null)
-                    return (symbol, (object?)quote);
-            }
-            catch { /* skip failed quotes */ }
-            return (symbol, (object?)null);
-        });
-
-        foreach (var (symbol, quote) in await Task.WhenAll(tasks))
-        {
-            if (quote != null)
-                results[symbol] = quote;
-        }
+        var results = await _quoteCache.GetBatchQuotes(symbolList);
 
         return Ok(new { data = results });
+    }
+
+    /// <summary>
+    /// Haal een enkele quote op (met cache).
+    /// </summary>
+    [HttpGet("{symbol}")]
+    public async Task<IActionResult> GetQuote(string symbol)
+    {
+        var quote = await _quoteCache.GetQuote(symbol.ToUpper());
+        if (quote == null)
+            return NotFound(new { error = $"Geen quote beschikbaar voor {symbol}" });
+
+        return Ok(new { data = quote });
     }
 }
