@@ -4,7 +4,8 @@ import { useWatchlist, useAddToWatchlist, useRemoveFromWatchlist, useLatestSigna
 import { Plus, X } from 'lucide-react';
 import type { WatchlistItem, Signal } from '../types';
 import { relativeTime } from '../utils/formatTime';
-import { VerdictBadge, ScoreBar, SymbolSearch } from '../components/shared';
+import { VerdictBadge, ScoreBar, SymbolSearch, InfoTooltip } from '../components/shared';
+import { TOOLTIPS } from '../utils/tooltipTexts';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -255,7 +256,7 @@ export default function WatchlistPage() {
                 {/* Market Cap */}
                 {item.marketCap && (
                   <div className="mt-2 flex items-center justify-between">
-                    <span className="text-xs text-gray-500">Market Cap</span>
+                    <span className="text-xs text-gray-500 flex items-center">Market Cap<InfoTooltip text={TOOLTIPS.watchlistMarketCap} size={11} /></span>
                     <span className="text-xs text-gray-400 font-mono">{fmtLarge(item.marketCap)}</span>
                   </div>
                 )}

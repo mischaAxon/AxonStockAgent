@@ -5,7 +5,8 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceL
 import { useFundamentals, useInsiderTransactions, useWatchlist, useSignals, useNewsBySymbol, useBatchQuotes } from '../hooks/useApi';
 import type { CompanyFundamentals, InsiderTransaction, Signal, NewsArticle } from '../types';
 import { relativeTime } from '../utils/formatTime';
-import { VerdictBadge, ScoreBar } from '../components/shared';
+import { VerdictBadge, ScoreBar, InfoTooltip } from '../components/shared';
+import { TOOLTIPS } from '../utils/tooltipTexts';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -78,10 +79,13 @@ function payoutColor(v: number | null) {
 
 // ─── sub-components ──────────────────────────────────────────────────────────
 
-function MetricCard({ label, value, color }: { label: string; value: string; color: string }) {
+function MetricCard({ label, value, color, tooltip }: { label: string; value: string; color: string; tooltip?: string }) {
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-      <p className="text-xs text-gray-500 mb-1">{label}</p>
+      <p className="text-xs text-gray-500 mb-1 flex items-center">
+        {label}
+        {tooltip && <InfoTooltip text={tooltip} />}
+      </p>
       <p className={`text-xl font-bold ${color}`}>{value}</p>
     </div>
   );
@@ -151,7 +155,7 @@ function AnalystBar({ data }: { data: CompanyFundamentals }) {
 
       {(data.targetPriceMean != null) && (
         <div className="mt-2 space-y-1">
-          <p className="text-xs text-gray-500">Koersdoel analisten</p>
+          <p className="text-xs text-gray-500 flex items-center">Koersdoel analisten<InfoTooltip text={TOOLTIPS.targetPrice} size={11} /></p>
           <div className="flex items-center gap-2 text-sm">
             <span className="text-gray-400">Laag: <span className="text-white">${fmt(data.targetPriceLow)}</span></span>
             <span className="text-gray-600">·</span>
@@ -323,7 +327,7 @@ export default function StockDetailPage() {
       {quote && (
         <div className="flex items-center gap-4 bg-gray-900 border border-gray-800 rounded-xl px-5 py-3">
           <div>
-            <p className="text-xs text-gray-500 mb-0.5">Live Prijs</p>
+            <p className="text-xs text-gray-500 mb-0.5 flex items-center">Live Prijs<InfoTooltip text={TOOLTIPS.livePrice} size={11} /></p>
             <p className="text-3xl font-bold font-mono text-white">
               {quote.currentPrice >= 1000
                 ? quote.currentPrice.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -346,23 +350,23 @@ export default function StockDetailPage() {
           </div>
           <div className="ml-auto flex gap-6 text-xs text-gray-500">
             <div>
-              <span className="block text-gray-600">Open</span>
+              <span className="flex items-center text-gray-600">Open<InfoTooltip text={TOOLTIPS.open} size={11} /></span>
               <span className="text-gray-300 font-mono">{quote.open.toFixed(2)}</span>
             </div>
             <div>
-              <span className="block text-gray-600">High</span>
+              <span className="flex items-center text-gray-600">High<InfoTooltip text={TOOLTIPS.high} size={11} /></span>
               <span className="text-green-400/70 font-mono">{quote.high.toFixed(2)}</span>
             </div>
             <div>
-              <span className="block text-gray-600">Low</span>
+              <span className="flex items-center text-gray-600">Low<InfoTooltip text={TOOLTIPS.low} size={11} /></span>
               <span className="text-red-400/70 font-mono">{quote.low.toFixed(2)}</span>
             </div>
             <div>
-              <span className="block text-gray-600">Prev Close</span>
+              <span className="flex items-center text-gray-600">Prev Close<InfoTooltip text={TOOLTIPS.prevClose} size={11} /></span>
               <span className="text-gray-300 font-mono">{quote.previousClose.toFixed(2)}</span>
             </div>
             <div>
-              <span className="block text-gray-600">Volume</span>
+              <span className="flex items-center text-gray-600">Volume<InfoTooltip text={TOOLTIPS.volume} size={11} /></span>
               <span className="text-gray-300 font-mono">
                 {quote.volume >= 1e6
                   ? (quote.volume / 1e6).toFixed(1) + 'M'
@@ -379,7 +383,7 @@ export default function StockDetailPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {/* Latest signal */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <p className="text-xs text-gray-500 mb-1.5">Laatste Signaal</p>
+          <p className="text-xs text-gray-500 mb-1.5 flex items-center">Laatste Signaal<InfoTooltip text={TOOLTIPS.verdict} /></p>
           {signalsLoading ? (
             <div className="h-5 bg-gray-800 rounded animate-pulse w-16" />
           ) : latestSignal ? (
@@ -394,7 +398,7 @@ export default function StockDetailPage() {
 
         {/* Score */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <p className="text-xs text-gray-500 mb-1.5">Score</p>
+          <p className="text-xs text-gray-500 mb-1.5 flex items-center">Score<InfoTooltip text={TOOLTIPS.finalScore} /></p>
           {signalsLoading ? (
             <div className="h-5 bg-gray-800 rounded animate-pulse w-12" />
           ) : latestSignal ? (
@@ -412,7 +416,7 @@ export default function StockDetailPage() {
 
         {/* Total signals */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <p className="text-xs text-gray-500 mb-1.5">Totaal Signalen</p>
+          <p className="text-xs text-gray-500 mb-1.5 flex items-center">Totaal Signalen<InfoTooltip text={TOOLTIPS.totalSignals} /></p>
           {signalsLoading ? (
             <div className="h-5 bg-gray-800 rounded animate-pulse w-8" />
           ) : (
@@ -422,7 +426,7 @@ export default function StockDetailPage() {
 
         {/* Average score */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <p className="text-xs text-gray-500 mb-1.5">Gemiddelde Score</p>
+          <p className="text-xs text-gray-500 mb-1.5 flex items-center">Gemiddelde Score<InfoTooltip text={TOOLTIPS.avgScore} /></p>
           {signalsLoading ? (
             <div className="h-5 bg-gray-800 rounded animate-pulse w-12" />
           ) : avgScore != null ? (
@@ -439,7 +443,7 @@ export default function StockDetailPage() {
 
       {/* ── Score Trend Chart ──────────────────────────────────────────────── */}
       <section>
-        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Score Trend</h2>
+        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center">Score Trend<InfoTooltip text={TOOLTIPS.scoreTrend} /></h2>
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
           {signalsLoading ? (
             <div className="h-[200px] bg-gray-800 rounded animate-pulse" />
@@ -600,11 +604,11 @@ export default function StockDetailPage() {
           <section>
             <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Waardering</h2>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              <MetricCard label="P/E Ratio"    value={fmt(fund.peRatio)}    color={peColor(fund.peRatio)} />
-              <MetricCard label="Forward P/E"  value={fmt(fund.forwardPe)}  color={peColor(fund.forwardPe)} />
-              <MetricCard label="P/B Ratio"    value={fmt(fund.pbRatio)}    color={fund.pbRatio != null && fund.pbRatio < 3 ? 'text-green-400' : 'text-yellow-400'} />
-              <MetricCard label="P/S Ratio"    value={fmt(fund.psRatio)}    color={fund.psRatio != null && fund.psRatio < 2 ? 'text-green-400' : 'text-yellow-400'} />
-              <MetricCard label="EV/EBITDA"    value={fmt(fund.evToEbitda)} color={fund.evToEbitda != null && fund.evToEbitda < 15 ? 'text-green-400' : 'text-yellow-400'} />
+              <MetricCard label="P/E Ratio"    value={fmt(fund.peRatio)}    color={peColor(fund.peRatio)}    tooltip={TOOLTIPS.peRatio} />
+              <MetricCard label="Forward P/E"  value={fmt(fund.forwardPe)}  color={peColor(fund.forwardPe)}  tooltip={TOOLTIPS.forwardPe} />
+              <MetricCard label="P/B Ratio"    value={fmt(fund.pbRatio)}    color={fund.pbRatio != null && fund.pbRatio < 3 ? 'text-green-400' : 'text-yellow-400'} tooltip={TOOLTIPS.pbRatio} />
+              <MetricCard label="P/S Ratio"    value={fmt(fund.psRatio)}    color={fund.psRatio != null && fund.psRatio < 2 ? 'text-green-400' : 'text-yellow-400'} tooltip={TOOLTIPS.psRatio} />
+              <MetricCard label="EV/EBITDA"    value={fmt(fund.evToEbitda)} color={fund.evToEbitda != null && fund.evToEbitda < 15 ? 'text-green-400' : 'text-yellow-400'} tooltip={TOOLTIPS.evToEbitda} />
             </div>
           </section>
 
@@ -612,12 +616,12 @@ export default function StockDetailPage() {
           <section>
             <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Winstgevendheid & Groei</h2>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <MetricCard label="Nettomarge"         value={fmtPct(fund.profitMargin)}      color={pctColor(fund.profitMargin)} />
-              <MetricCard label="Operationele marge" value={fmtPct(fund.operatingMargin)}   color={pctColor(fund.operatingMargin)} />
-              <MetricCard label="ROE"                value={fmtPct(fund.returnOnEquity)}    color={pctColor(fund.returnOnEquity)} />
-              <MetricCard label="ROA"                value={fmtPct(fund.returnOnAssets)}    color={pctColor(fund.returnOnAssets)} />
-              <MetricCard label="Omzetgroei (YoY)"   value={fmtPct(fund.revenueGrowthYoy)}  color={pctColor(fund.revenueGrowthYoy)} />
-              <MetricCard label="Winstgroei (YoY)"   value={fmtPct(fund.earningsGrowthYoy)} color={pctColor(fund.earningsGrowthYoy)} />
+              <MetricCard label="Nettomarge"         value={fmtPct(fund.profitMargin)}      color={pctColor(fund.profitMargin)}      tooltip={TOOLTIPS.profitMargin} />
+              <MetricCard label="Operationele marge" value={fmtPct(fund.operatingMargin)}   color={pctColor(fund.operatingMargin)}   tooltip={TOOLTIPS.operatingMargin} />
+              <MetricCard label="ROE"                value={fmtPct(fund.returnOnEquity)}    color={pctColor(fund.returnOnEquity)}    tooltip={TOOLTIPS.returnOnEquity} />
+              <MetricCard label="ROA"                value={fmtPct(fund.returnOnAssets)}    color={pctColor(fund.returnOnAssets)}    tooltip={TOOLTIPS.returnOnAssets} />
+              <MetricCard label="Omzetgroei (YoY)"   value={fmtPct(fund.revenueGrowthYoy)}  color={pctColor(fund.revenueGrowthYoy)}  tooltip={TOOLTIPS.revenueGrowthYoy} />
+              <MetricCard label="Winstgroei (YoY)"   value={fmtPct(fund.earningsGrowthYoy)} color={pctColor(fund.earningsGrowthYoy)} tooltip={TOOLTIPS.earningsGrowthYoy} />
             </div>
           </section>
 
@@ -625,9 +629,9 @@ export default function StockDetailPage() {
           <section>
             <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Balans</h2>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <MetricCard label="Schuld/Eigen vermogen" value={fmt(fund.debtToEquity)} color={deColor(fund.debtToEquity)} />
-              <MetricCard label="Current Ratio"         value={fmt(fund.currentRatio)} color={ratioColor(fund.currentRatio)} />
-              <MetricCard label="Quick Ratio"           value={fmt(fund.quickRatio)}   color={ratioColor(fund.quickRatio)} />
+              <MetricCard label="Schuld/Eigen vermogen" value={fmt(fund.debtToEquity)} color={deColor(fund.debtToEquity)}     tooltip={TOOLTIPS.debtToEquity} />
+              <MetricCard label="Current Ratio"         value={fmt(fund.currentRatio)} color={ratioColor(fund.currentRatio)} tooltip={TOOLTIPS.currentRatio} />
+              <MetricCard label="Quick Ratio"           value={fmt(fund.quickRatio)}   color={ratioColor(fund.quickRatio)}   tooltip={TOOLTIPS.quickRatio} />
             </div>
           </section>
 
@@ -636,8 +640,8 @@ export default function StockDetailPage() {
             <section>
               <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Dividend</h2>
               <div className="grid grid-cols-2 gap-3 max-w-xs">
-                <MetricCard label="Dividendrendement" value={fmtPct(fund.dividendYield)} color="text-white" />
-                <MetricCard label="Uitkeringsratio"   value={fmtPct(fund.payoutRatio)}   color={payoutColor(fund.payoutRatio)} />
+                <MetricCard label="Dividendrendement" value={fmtPct(fund.dividendYield)} color="text-white"                    tooltip={TOOLTIPS.dividendYield} />
+                <MetricCard label="Uitkeringsratio"   value={fmtPct(fund.payoutRatio)}   color={payoutColor(fund.payoutRatio)} tooltip={TOOLTIPS.payoutRatio} />
               </div>
             </section>
           )}
@@ -646,15 +650,15 @@ export default function StockDetailPage() {
           <section>
             <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Omvang</h2>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <MetricCard label="Marktkapitalisatie" value={fmtLarge(fund.marketCap) !== '—' ? '$' + fmtLarge(fund.marketCap) : '—'} color="text-white" />
-              <MetricCard label="Omzet (TTM)"        value={fund.revenue   != null ? '$' + fmtLarge(fund.revenue)   : '—'} color="text-white" />
-              <MetricCard label="Nettoresultaat"     value={fund.netIncome != null ? '$' + fmtLarge(fund.netIncome) : '—'} color={pctColor(fund.netIncome)} />
+              <MetricCard label="Marktkapitalisatie" value={fmtLarge(fund.marketCap) !== '—' ? '$' + fmtLarge(fund.marketCap) : '—'} color="text-white"                tooltip={TOOLTIPS.marketCap} />
+              <MetricCard label="Omzet (TTM)"        value={fund.revenue   != null ? '$' + fmtLarge(fund.revenue)   : '—'} color="text-white"                tooltip={TOOLTIPS.revenue} />
+              <MetricCard label="Nettoresultaat"     value={fund.netIncome != null ? '$' + fmtLarge(fund.netIncome) : '—'} color={pctColor(fund.netIncome)} tooltip={TOOLTIPS.netIncome} />
             </div>
           </section>
 
           {/* Analyst consensus */}
           <section>
-            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Analisten consensus</h2>
+            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center">Analisten consensus<InfoTooltip text={TOOLTIPS.analystConsensus} /></h2>
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
               <AnalystBar data={fund} />
             </div>

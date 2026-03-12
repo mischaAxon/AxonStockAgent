@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Search, ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { useAllSymbols, useBatchQuotes, useLatestSignalsPerSymbol } from '../hooks/useApi';
 import type { MarketSymbol, Quote, LatestSignalPerSymbol } from '../types';
+import { InfoTooltip } from '../components/shared';
+import { TOOLTIPS } from '../utils/tooltipTexts';
 
 function countryFlag(code: string | null): string {
   if (!code || code.length !== 2) return '🌐';
@@ -61,8 +63,9 @@ function SignalBadge({ signal }: { signal: LatestSignalPerSymbol | undefined }) 
   const pct = Math.round(signal.finalScore * 100);
 
   return (
-    <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${color}`}>
+    <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold inline-flex items-center gap-0.5 ${color}`}>
       {signal.finalVerdict} {pct}%
+      <InfoTooltip text={TOOLTIPS.signalBadge} size={10} />
     </span>
   );
 }

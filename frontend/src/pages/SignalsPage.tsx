@@ -4,7 +4,8 @@ import { Search, Zap, ChevronDown, ChevronUp, AlertTriangle, XCircle, Clock } fr
 import { useSignals, useProviders } from '../hooks/useApi';
 import type { Signal } from '../types';
 import { relativeTime } from '../utils/formatTime';
-import { VerdictBadge, ScoreBar } from '../components/shared';
+import { VerdictBadge, ScoreBar, InfoTooltip } from '../components/shared';
+import { TOOLTIPS } from '../utils/tooltipTexts';
 
 type VerdictFilter = '' | 'BUY' | 'SELL' | 'SQUEEZE';
 type Period = 'today' | 'week' | 'month' | 'all';
@@ -67,10 +68,13 @@ function ProviderWarningBanner() {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function BreakdownBar({ label, score }: { label: string; score: number | null }) {
+function BreakdownBar({ label, score, tooltip }: { label: string; score: number | null; tooltip?: string }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="text-xs text-gray-400 w-32 shrink-0">{label}</span>
+      <span className="text-xs text-gray-400 w-36 shrink-0 flex items-center">
+        {label}
+        {tooltip && <InfoTooltip text={tooltip} size={11} />}
+      </span>
       {score !== null ? (
         <>
           <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
@@ -101,11 +105,11 @@ function SignalDetail({ signal }: { signal: Signal }) {
       <div>
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Score Breakdown</p>
         <div className="space-y-2.5">
-          <BreakdownBar label="Technical"    score={techNorm} />
-          <BreakdownBar label="Sentiment"    score={sentNorm} />
-          <BreakdownBar label={claudeLabel}  score={claudeScore} />
-          <BreakdownBar label="ML"           score={mlScore} />
-          <BreakdownBar label="Fundamentals" score={null} />
+          <BreakdownBar label="Technical"    score={techNorm}    tooltip={TOOLTIPS.techScore} />
+          <BreakdownBar label="Sentiment"    score={sentNorm}    tooltip={TOOLTIPS.sentimentScore} />
+          <BreakdownBar label={claudeLabel}  score={claudeScore} tooltip={TOOLTIPS.claudeAI} />
+          <BreakdownBar label="ML"           score={mlScore}     tooltip={TOOLTIPS.mlScore} />
+          <BreakdownBar label="Fundamentals" score={null}        tooltip={TOOLTIPS.fundamentalsScore} />
         </div>
       </div>
 
@@ -113,10 +117,26 @@ function SignalDetail({ signal }: { signal: Signal }) {
       <div>
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Status Indicatoren</p>
         <div className="flex flex-wrap gap-2 mb-4">
-          {signal.trendStatus      && <span className="px-2 py-0.5 rounded bg-blue-500/20   text-blue-400   text-xs">{signal.trendStatus}</span>}
-          {signal.momentumStatus   && <span className="px-2 py-0.5 rounded bg-purple-500/20 text-purple-400 text-xs">{signal.momentumStatus}</span>}
-          {signal.volatilityStatus && <span className="px-2 py-0.5 rounded bg-amber-500/20  text-amber-400  text-xs">{signal.volatilityStatus}</span>}
-          {signal.volumeStatus     && <span className="px-2 py-0.5 rounded bg-gray-600/50   text-gray-300   text-xs">{signal.volumeStatus}</span>}
+          {signal.trendStatus && (
+            <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 text-xs flex items-center gap-1">
+              {signal.trendStatus}<InfoTooltip text={TOOLTIPS.trendStatus} size={11} />
+            </span>
+          )}
+          {signal.momentumStatus && (
+            <span className="px-2 py-0.5 rounded bg-purple-500/20 text-purple-400 text-xs flex items-center gap-1">
+              {signal.momentumStatus}<InfoTooltip text={TOOLTIPS.momentumStatus} size={11} />
+            </span>
+          )}
+          {signal.volatilityStatus && (
+            <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 text-xs flex items-center gap-1">
+              {signal.volatilityStatus}<InfoTooltip text={TOOLTIPS.volatilityStatus} size={11} />
+            </span>
+          )}
+          {signal.volumeStatus && (
+            <span className="px-2 py-0.5 rounded bg-gray-600/50 text-gray-300 text-xs flex items-center gap-1">
+              {signal.volumeStatus}<InfoTooltip text={TOOLTIPS.volumeStatus} size={11} />
+            </span>
+          )}
         </div>
 
         {signal.claudeReasoning && (

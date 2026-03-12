@@ -4,7 +4,8 @@ import { usePortfolio, useUpsertPortfolio, useDeletePortfolio, useLatestSignals 
 import { Plus, Trash2, Briefcase } from 'lucide-react';
 import type { PortfolioItem, Signal } from '../types';
 import { relativeTime } from '../utils/formatTime';
-import { VerdictBadge, SymbolSearch } from '../components/shared';
+import { VerdictBadge, SymbolSearch, InfoTooltip } from '../components/shared';
+import { TOOLTIPS } from '../utils/tooltipTexts';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -132,7 +133,7 @@ export default function PortfolioPage() {
           {/* Summary cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <p className="text-xs text-gray-500 mb-1">Portefeuillewaarde</p>
+              <p className="text-xs text-gray-500 mb-1 flex items-center">Portefeuillewaarde<InfoTooltip text={TOOLTIPS.portfolioValue} /></p>
               <p className="text-2xl font-bold text-white">
                 €{totalValue.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
@@ -150,7 +151,7 @@ export default function PortfolioPage() {
           {/* Allocatie bar */}
           {allocations.length > 0 && (
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Allocatie</p>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center">Allocatie<InfoTooltip text={TOOLTIPS.allocation} /></p>
 
               {/* Stacked bar */}
               <div className="flex h-3 rounded-full overflow-hidden mb-3">

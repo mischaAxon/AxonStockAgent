@@ -3,15 +3,17 @@ import { TrendingUp, TrendingDown, Zap, Eye, Briefcase, Activity } from 'lucide-
 import { useDashboard, useSectorSentiment, useTrending } from '../hooks/useApi';
 import type { Signal, SectorSentiment, TrendingSymbol } from '../types';
 import { relativeTime } from '../utils/formatTime';
-import { VerdictBadge, ScoreBar } from '../components/shared';
+import { VerdictBadge, ScoreBar, InfoTooltip } from '../components/shared';
+import { TOOLTIPS } from '../utils/tooltipTexts';
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function StatCard({ icon, label, value, color }: {
+function StatCard({ icon, label, value, color, tooltip }: {
   icon: React.ReactNode;
   label: string;
   value: number;
   color: 'blue' | 'green' | 'red' | 'purple' | 'amber';
+  tooltip?: string;
 }) {
   const colors = {
     blue:   'bg-blue-500/10   text-blue-400   border-blue-500/20',
@@ -22,7 +24,11 @@ function StatCard({ icon, label, value, color }: {
   };
   return (
     <div className={`rounded-xl border p-5 ${colors[color]}`}>
-      <div className="flex items-center gap-2 mb-2 opacity-80">{icon}<span className="text-sm">{label}</span></div>
+      <div className="flex items-center gap-2 mb-2 opacity-80">
+        {icon}
+        <span className="text-sm">{label}</span>
+        {tooltip && <InfoTooltip text={tooltip} />}
+      </div>
       <div className="text-3xl font-bold">{value}</div>
     </div>
   );
@@ -125,11 +131,11 @@ export default function DashboardPage() {
 
       {/* 5 stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        <StatCard icon={<Eye size={20} />}          label="Watchlist"      value={d.watchlistCount}       color="blue" />
-        <StatCard icon={<Briefcase size={20} />}    label="Portfolio"      value={d.portfolioPositions}   color="purple" />
-        <StatCard icon={<TrendingUp size={20} />}   label="BUY deze week"  value={d.signals.weekBuys}     color="green" />
-        <StatCard icon={<TrendingDown size={20} />} label="SELL deze week" value={d.signals.weekSells}    color="red" />
-        <StatCard icon={<Zap size={20} />}          label="SQUEEZE"        value={d.signals.weekSqueezes} color="amber" />
+        <StatCard icon={<Eye size={20} />}          label="Watchlist"      value={d.watchlistCount}       color="blue"   tooltip={TOOLTIPS.watchlistCount} />
+        <StatCard icon={<Briefcase size={20} />}    label="Portfolio"      value={d.portfolioPositions}   color="purple" tooltip={TOOLTIPS.portfolioPositions} />
+        <StatCard icon={<TrendingUp size={20} />}   label="BUY deze week"  value={d.signals.weekBuys}     color="green"  tooltip={TOOLTIPS.weekBuys} />
+        <StatCard icon={<TrendingDown size={20} />} label="SELL deze week" value={d.signals.weekSells}    color="red"    tooltip={TOOLTIPS.weekSells} />
+        <StatCard icon={<Zap size={20} />}          label="SQUEEZE"        value={d.signals.weekSqueezes} color="amber"  tooltip={TOOLTIPS.weekSqueezes} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
@@ -164,7 +170,7 @@ export default function DashboardPage() {
           <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
             <div className="flex items-center gap-2 mb-4">
               <Activity size={16} className="text-gray-400" />
-              <h3 className="text-lg font-semibold text-white">Trending</h3>
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">Trending<InfoTooltip text={TOOLTIPS.trending} /></h3>
             </div>
             <TrendingWidget data={trendingSymbols} />
           </div>
@@ -173,7 +179,7 @@ export default function DashboardPage() {
 
       {/* Sector sentiment */}
       <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Sector Sentiment</h3>
+        <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">Sector Sentiment<InfoTooltip text={TOOLTIPS.sectorSentiment} /></h3>
         <SectorSentimentWidget data={sectorSentiments} />
       </div>
     </div>
