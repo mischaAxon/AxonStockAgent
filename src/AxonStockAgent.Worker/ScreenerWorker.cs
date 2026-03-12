@@ -159,6 +159,8 @@ public class ScreenerWorker : BackgroundService
         // Haal scan-gedrag instellingen op
         var dedupWindowMinutes = (int)await algoSettings.GetDecimalAsync("scan", "signal_dedup_minutes", 60m);
         var normalizeMissingSources = await algoSettings.GetBoolAsync("scan", "normalize_missing_sources", true);
+        var squeezeMinBars = (int)await algoSettings.GetDecimalAsync("thresholds", "squeeze_min_bars", 3m);
+        var volatilityRiskEnabled = await algoSettings.GetBoolAsync("scan", "volatility_risk_enabled", true);
 
         // ── 3. Init services ──
         var marketProvider = await providers.GetMarketDataProvider();
@@ -194,7 +196,8 @@ public class ScreenerWorker : BackgroundService
                     symbol, marketProvider, newsProviders, claudeService, fundamentalsService,
                     techWeight, mlWeight, sentimentWeight, claudeWeight, fundamentalWeight,
                     buyThreshold, sellThreshold, squeezeThreshold,
-                    lookbackDays, minVolume, normalizeMissingSources, ct);
+                    lookbackDays, minVolume, normalizeMissingSources,
+                    squeezeMinBars, volatilityRiskEnabled, ct);
 
                 if (signal != null)
                 {
@@ -246,6 +249,7 @@ public class ScreenerWorker : BackgroundService
         double claudeWeight, double fundamentalWeight,
         double buyThreshold, double sellThreshold, double squeezeThreshold,
         int lookbackDays, long minVolume, bool normalizeMissingSources,
+        int squeezeMinBars, bool volatilityRiskEnabled,
         CancellationToken ct)
     {
         // ── Fetch candles ──
@@ -348,7 +352,6 @@ public class ScreenerWorker : BackgroundService
         if (normalizeMissingSources)
         {
             // Normalize mode: ontbrekende bronnen → 0.5 (neutraal), gewichten tellen altijd mee.
-            // Scores zijn zo vergelijkbaar over symbolen ongeacht welke bronnen beschikbaar zijn.
             var sentNormEff   = sentPresent   ? sentNorm   : 0.5;
             var claudeNormEff = claudePresent ? claudeNorm : 0.5;
             var mlNormEff     = mlPresent     ? mlNorm     : 0.5;
@@ -358,11 +361,14 @@ public class ScreenerWorker : BackgroundService
                        + sentNormEff   * sentimentWeight
                        + claudeNormEff * claudeWeight
                        + fundNorm      * fundamentalWeight;
-            // gewichten tellen op tot 1.0 → geen deling nodig
+
+            // Volatility risk multiplier: hoge volatiliteit verlaagt de eindscore
+            if (volatilityRiskEnabled)
+                finalScore *= indicators.VolatilityRiskMultiplier;
         }
         else
         {
-            // Legacy mode: alleen aanwezige bronnen tellen mee (inconsistente denominatoren per symbool)
+            // Legacy mode: alleen aanwezige bronnen tellen mee
             double totalWeight = techWeight;
             double weightedSum = techNorm * techWeight;
 
@@ -372,24 +378,35 @@ public class ScreenerWorker : BackgroundService
             totalWeight += fundamentalWeight; weightedSum += fundNorm * fundamentalWeight;
 
             finalScore = totalWeight > 0 ? weightedSum / totalWeight : 0.5;
+
+            if (volatilityRiskEnabled)
+                finalScore *= indicators.VolatilityRiskMultiplier;
         }
 
+        var rawScore = volatilityRiskEnabled && indicators.VolatilityRiskMultiplier > 0
+            ? finalScore / indicators.VolatilityRiskMultiplier
+            : finalScore;
+
         _logger.LogDebug(
-            "{Symbol} score breakdown: tech={Tech:F3}, sent={Sent:F3}({SentP}), claude={Claude:F3}({ClaudeP}), ml={Ml:F3}({MlP}), fund={Fund:F3}({FundP}) → final={Final:F3} [{Mode}]",
+            "{Symbol} score breakdown: tech={Tech:F3}, sent={Sent:F3}({SentP}), claude={Claude:F3}({ClaudeP}), ml={Ml:F3}({MlP}), fund={Fund:F3}({FundP}) → raw={Raw:F3}, volRisk={VolRisk:F2}, final={Final:F3} [{Mode}] [BBpct={BBPct:F2}, sqzBars={SqzBars}]",
             symbol,
             techNorm,
             sentPresent   ? sentNorm   : 0.5, sentPresent   ? "aanwezig" : "neutraal",
             claudePresent ? claudeNorm : 0.5, claudePresent ? "aanwezig" : "neutraal",
             mlPresent     ? mlNorm     : 0.5, mlPresent     ? "aanwezig" : "neutraal",
             fundNorm, fundPresent ? "aanwezig" : "neutraal",
+            rawScore,
+            indicators.VolatilityRiskMultiplier,
             finalScore,
-            normalizeMissingSources ? "normalize" : "legacy");
+            normalizeMissingSources ? "normalize" : "legacy",
+            indicators.BbWidthPercentile,
+            indicators.SqueezeBarCount);
 
         // ── Verdict bepalen ──
         string verdict;
         string direction;
 
-        if (indicators.SqueezeDetected && finalScore >= squeezeThreshold)
+        if (indicators.SqueezeDetected && indicators.SqueezeBarCount >= squeezeMinBars && finalScore >= squeezeThreshold)
         {
             verdict = "SQUEEZE";
             direction = "LONG";

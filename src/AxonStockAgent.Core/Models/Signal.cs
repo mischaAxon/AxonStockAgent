@@ -23,7 +23,10 @@ public record IndicatorResult(
     string MomDesc,
     string VolDesc,
     string VolumDesc,
-    bool SqueezeDetected
+    bool SqueezeDetected,
+    double BbWidthPercentile,
+    int SqueezeBarCount,
+    double VolatilityRiskMultiplier
 );
 
 public record AiEnrichedSignal(

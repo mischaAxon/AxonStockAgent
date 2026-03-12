@@ -222,7 +222,12 @@ INSERT INTO algo_settings (category, key, value, description, value_type, min_va
     -- Notificatie instellingen
     ('notifications', 'notify_buy',     'true',  'Notificeer bij BUY signalen',     'boolean', null, null),
     ('notifications', 'notify_sell',    'true',  'Notificeer bij SELL signalen',    'boolean', null, null),
-    ('notifications', 'notify_squeeze', 'true',  'Notificeer bij SQUEEZE signalen', 'boolean', null, null)
+    ('notifications', 'notify_squeeze', 'true',  'Notificeer bij SQUEEZE signalen', 'boolean', null, null),
+    -- Squeeze-detectie + volatiliteit als risicofactor (prompt 09)
+    ('thresholds', 'squeeze_min_bars',        '3',    'Minimum aantal opeenvolgende squeeze-bars voor een SQUEEZE signaal', 'integer', 1,    10),
+    ('thresholds', 'squeeze_percentile',      '0.20', 'BB-width percentiel drempel voor squeeze detectie (0.20 = laagste 20%)', 'decimal', 0.05, 0.5),
+    ('scan',       'volatility_risk_enabled', 'true', 'Hoge volatiliteit verlaagt de eindscore via een risico-multiplier (0.70–1.0)', 'boolean', null, null),
+    ('scan',       'bb_width_lookback',       '120',  'Aantal bars voor BB-width percentiel ranking (squeeze detectie)', 'integer', 20, 500)
 ON CONFLICT (category, key) DO NOTHING;
 
 -- Seed default watchlist

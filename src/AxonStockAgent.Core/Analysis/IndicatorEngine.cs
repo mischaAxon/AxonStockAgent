@@ -88,36 +88,82 @@ public static class IndicatorEngine
             _ => "Strong Bearish Momentum"
         };
 
-        // ── Volatiliteit (ATR + Bollinger Band width) ──
+        // ── Volatiliteit (ATR-based risk + BB-width percentile squeeze) ──
         var atr = Atr(highs, lows, closes, 14);
         var bbWidth = BollingerBandWidth(closes, 20, 2);
 
         double volScore = 0;
         string volDesc;
+        double bbWidthPercentile = 0.5;
+        int squeezeBarCount = 0;
+        double volatilityRiskMultiplier = 1.0;
 
         if (atr.Length > 0)
         {
+            // ATR als percentage van de prijs — hogere ATR% = LAGERE score (risico)
             var atrPct = atr[^1] / closes[^1];
-            volScore += Clamp((atrPct - 0.02) * 25, -0.5, 0.5);
+            // Inverteer: lage ATR% → score richting +1, hoge ATR% → score richting -1
+            // Baseline 2% ATR is neutraal
+            volScore += Clamp((0.02 - atrPct) * 25, -0.5, 0.5);
         }
 
-        if (bbWidth.Length >= 2)
+        if (bbWidth.Length >= 20)
         {
+            // ── BB-width percentile ranking ──
+            var lookback = Math.Min(bbWidth.Length, 120);
+            var recentWidths = bbWidth.TakeLast(lookback).ToArray();
+            var currentWidth = bbWidth[^1];
+            var countBelow = recentWidths.Count(w => w < currentWidth);
+            bbWidthPercentile = (double)countBelow / recentWidths.Length;
+
+            // BB-width verandering bijdrage (compressie = positief voor squeeze, expansie = negatief)
             var widthChange = (bbWidth[^1] - bbWidth[^2]) / bbWidth[^2];
-            volScore += Clamp(widthChange * 10, -0.5, 0.5);
+            volScore += Clamp(-widthChange * 10, -0.5, 0.5);
+
+            // ── Squeeze detectie: BB-width in laagste 20% van lookback ──
+            const double squeezePercentileThreshold = 0.20;
+            if (bbWidthPercentile <= squeezePercentileThreshold)
+            {
+                squeezeBarCount = 1;
+                for (int i = recentWidths.Length - 2; i >= 0; i--)
+                {
+                    var barPercentile = (double)recentWidths.Take(i + 1).Count(w => w < recentWidths[i]) / (i + 1);
+                    if (barPercentile <= squeezePercentileThreshold)
+                        squeezeBarCount++;
+                    else
+                        break;
+                }
+            }
+
+            // ── Volatility risk multiplier ──
+            // Hoge volatiliteit (brede BB) = lagere multiplier = lagere eindscore
+            if (bbWidthPercentile <= 0.3)
+                volatilityRiskMultiplier = 1.0;
+            else if (bbWidthPercentile <= 0.7)
+                volatilityRiskMultiplier = 1.0 - (bbWidthPercentile - 0.3) * 0.375; // 1.0 → 0.85
+            else
+                volatilityRiskMultiplier = 0.85 - (bbWidthPercentile - 0.7) * 0.5;  // 0.85 → 0.70
+
+            volatilityRiskMultiplier = Clamp(volatilityRiskMultiplier, 0.70, 1.0);
+        }
+        else if (bbWidth.Length >= 2)
+        {
+            // Fallback als er minder dan 20 bars BB-width zijn
+            var widthChange = (bbWidth[^1] - bbWidth[^2]) / bbWidth[^2];
+            volScore += Clamp(-widthChange * 10, -0.5, 0.5);
         }
 
         volScore = Clamp(volScore, -1, 1);
         volDesc = volScore switch
         {
-            > 0.5 => "High Volatility (Expanding)",
-            > 0.15 => "Above Average Volatility",
+            > 0.5  => "Low Volatility (Stable)",
+            > 0.15 => "Below Average Volatility",
             > -0.15 => "Normal Volatility",
-            > -0.5 => "Low Volatility (Compressing)",
-            _ => "Squeeze Detected"
+            > -0.5 => "Above Average Volatility",
+            _ => "High Volatility (Risk)"
         };
 
-        bool squeezeDetected = volScore < -0.3 && Math.Abs(momentumScore) > 0.2;
+        bool squeezeDetected = squeezeBarCount >= 3 && Math.Abs(momentumScore) > 0.15;
 
         // ── Volume ──
         double volumeScore = 0;
@@ -154,7 +200,10 @@ public static class IndicatorEngine
             MomDesc: momDesc,
             VolDesc: volDesc,
             VolumDesc: volumeDesc,
-            SqueezeDetected: squeezeDetected
+            SqueezeDetected: squeezeDetected,
+            BbWidthPercentile: bbWidthPercentile,
+            SqueezeBarCount: squeezeBarCount,
+            VolatilityRiskMultiplier: volatilityRiskMultiplier
         );
     }
 
