@@ -55,6 +55,15 @@ CREATE INDEX IF NOT EXISTS idx_signals_symbol  ON signals(symbol);
 CREATE INDEX IF NOT EXISTS idx_signals_created ON signals(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_signals_verdict ON signals(final_verdict);
 
+-- Outcome tracking kolommen (idempotent voor bestaande databases)
+ALTER TABLE signals ADD COLUMN IF NOT EXISTS price_after_1d   DOUBLE PRECISION;
+ALTER TABLE signals ADD COLUMN IF NOT EXISTS price_after_5d   DOUBLE PRECISION;
+ALTER TABLE signals ADD COLUMN IF NOT EXISTS price_after_20d  DOUBLE PRECISION;
+ALTER TABLE signals ADD COLUMN IF NOT EXISTS return_pct_1d    DOUBLE PRECISION;
+ALTER TABLE signals ADD COLUMN IF NOT EXISTS return_pct_5d    DOUBLE PRECISION;
+ALTER TABLE signals ADD COLUMN IF NOT EXISTS return_pct_20d   DOUBLE PRECISION;
+ALTER TABLE signals ADD COLUMN IF NOT EXISTS outcome_correct  BOOLEAN;
+
 -- Portfolio posities
 CREATE TABLE IF NOT EXISTS portfolio (
     id            SERIAL PRIMARY KEY,

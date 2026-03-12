@@ -86,4 +86,48 @@ public class SignalsController : ControllerBase
 
         return Ok(new { data = new { totalSignals, todaySignals, weekSignals, verdictCounts } });
     }
+
+    [HttpGet("accuracy")]
+    public async Task<IActionResult> GetAccuracy([FromQuery] int days = 30)
+    {
+        var since = DateTime.UtcNow.AddDays(-days);
+
+        var signals = await _db.Signals
+            .Where(s => s.CreatedAt >= since && s.OutcomeCorrect.HasValue)
+            .ToListAsync();
+
+        if (signals.Count == 0)
+            return Ok(new { data = new { totalTracked = 0, message = "Nog geen outcome data beschikbaar" } });
+
+        var correct   = signals.Count(s => s.OutcomeCorrect == true);
+        var incorrect = signals.Count(s => s.OutcomeCorrect == false);
+        var accuracy  = (double)correct / signals.Count * 100;
+
+        var byVerdict = signals
+            .GroupBy(s => s.FinalVerdict)
+            .Select(g => new
+            {
+                verdict      = g.Key,
+                total        = g.Count(),
+                correct      = g.Count(s => s.OutcomeCorrect == true),
+                accuracy     = g.Count() > 0 ? (double)g.Count(s => s.OutcomeCorrect == true) / g.Count() * 100 : 0,
+                avgReturn1d  = g.Where(s => s.ReturnPct1d.HasValue).Select(s => s.ReturnPct1d!.Value).DefaultIfEmpty(0).Average(),
+                avgReturn5d  = g.Where(s => s.ReturnPct5d.HasValue).Select(s => s.ReturnPct5d!.Value).DefaultIfEmpty(0).Average(),
+                avgReturn20d = g.Where(s => s.ReturnPct20d.HasValue).Select(s => s.ReturnPct20d!.Value).DefaultIfEmpty(0).Average()
+            })
+            .ToList();
+
+        return Ok(new
+        {
+            data = new
+            {
+                totalTracked = signals.Count,
+                correct,
+                incorrect,
+                accuracyPct  = Math.Round(accuracy, 1),
+                byVerdict,
+                periodDays   = days
+            }
+        });
+    }
 }

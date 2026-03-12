@@ -17,6 +17,14 @@ export interface Signal {
   volumeStatus: string | null;
   notified: boolean;
   createdAt: string;
+  // Outcome tracking
+  priceAfter1d: number | null;
+  priceAfter5d: number | null;
+  priceAfter20d: number | null;
+  returnPct1d: number | null;
+  returnPct5d: number | null;
+  returnPct20d: number | null;
+  outcomeCorrect: boolean | null;
 }
 
 export interface WatchlistItem {

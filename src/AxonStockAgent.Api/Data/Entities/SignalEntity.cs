@@ -20,4 +20,13 @@ public class SignalEntity
     public string? VolumeStatus { get; set; }
     public bool Notified { get; set; }
     public DateTime CreatedAt { get; set; }
+
+    // Outcome tracking
+    public double? PriceAfter1d { get; set; }
+    public double? PriceAfter5d { get; set; }
+    public double? PriceAfter20d { get; set; }
+    public double? ReturnPct1d { get; set; }
+    public double? ReturnPct5d { get; set; }
+    public double? ReturnPct20d { get; set; }
+    public bool? OutcomeCorrect { get; set; }
 }
