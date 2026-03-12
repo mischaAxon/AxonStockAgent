@@ -123,6 +123,7 @@ public class ScreenerWorker : BackgroundService
         var algoSettings = scope.ServiceProvider.GetRequiredService<AlgoSettingsService>();
         var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
         var httpFactory = scope.ServiceProvider.GetRequiredService<IHttpClientFactory>();
+        var fundamentalsService = scope.ServiceProvider.GetRequiredService<FundamentalsService>();
 
         // ── 1. Haal actieve symbolen op ──
         var symbols = await db.Watchlist
@@ -190,7 +191,7 @@ public class ScreenerWorker : BackgroundService
                 ct.ThrowIfCancellationRequested();
 
                 var signal = await ScanSymbolAsync(
-                    symbol, marketProvider, newsProviders, claudeService,
+                    symbol, marketProvider, newsProviders, claudeService, fundamentalsService,
                     techWeight, mlWeight, sentimentWeight, claudeWeight, fundamentalWeight,
                     buyThreshold, sellThreshold, squeezeThreshold,
                     lookbackDays, minVolume, normalizeMissingSources, ct);
@@ -240,6 +241,7 @@ public class ScreenerWorker : BackgroundService
         IMarketDataProvider marketProvider,
         INewsProvider[] newsProviders,
         ClaudeAnalysisService claudeService,
+        FundamentalsService fundamentalsService,
         double techWeight, double mlWeight, double sentimentWeight,
         double claudeWeight, double fundamentalWeight,
         double buyThreshold, double sellThreshold, double squeezeThreshold,
@@ -300,11 +302,47 @@ public class ScreenerWorker : BackgroundService
         var claudeNorm = claude?.Confidence ?? 0.5;
         if (claude?.Direction == "SELL") claudeNorm = 1 - claudeNorm;
         var mlNorm   = mlProbability.HasValue ? (double)mlProbability.Value : 0.5;
+
+        // ── Fundamentele analyse ──
         var fundNorm = 0.5;
+        try
+        {
+            var fundamentals = await fundamentalsService.GetFundamentals(symbol);
+            if (fundamentals != null)
+            {
+                var fundResult = FundamentalsScorer.Score(
+                    peRatio:           fundamentals.PeRatio,
+                    forwardPe:         fundamentals.ForwardPe,
+                    pbRatio:           fundamentals.PbRatio,
+                    profitMargin:      fundamentals.ProfitMargin,
+                    operatingMargin:   fundamentals.OperatingMargin,
+                    returnOnEquity:    fundamentals.ReturnOnEquity,
+                    revenueGrowthYoy:  fundamentals.RevenueGrowthYoy,
+                    earningsGrowthYoy: fundamentals.EarningsGrowthYoy,
+                    debtToEquity:      fundamentals.DebtToEquity,
+                    currentRatio:      fundamentals.CurrentRatio,
+                    analystBuy:        fundamentals.AnalystBuy,
+                    analystHold:       fundamentals.AnalystHold,
+                    analystSell:       fundamentals.AnalystSell,
+                    analystStrongBuy:  fundamentals.AnalystStrongBuy,
+                    analystStrongSell: fundamentals.AnalystStrongSell,
+                    targetPriceMean:   fundamentals.TargetPriceMean,
+                    currentPrice:      candles[^1].Close);
+
+                fundNorm = fundResult.Score;
+                _logger.LogDebug("{Symbol} fundamentals: {Score:F2} ({Desc}) [{Details}]",
+                    symbol, fundNorm, fundResult.Description, string.Join(", ", fundResult.Details));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Fundamentals scoring mislukt voor {Symbol}, gebruik neutraal", symbol);
+        }
 
         var sentPresent   = sentimentScore != 0;
         var claudePresent = claude != null;
         var mlPresent     = mlProbability.HasValue;
+        var fundPresent   = fundNorm != 0.5;
 
         double finalScore;
         if (normalizeMissingSources)
@@ -337,13 +375,13 @@ public class ScreenerWorker : BackgroundService
         }
 
         _logger.LogDebug(
-            "{Symbol} score breakdown: tech={Tech:F3}, sent={Sent:F3}({SentP}), claude={Claude:F3}({ClaudeP}), ml={Ml:F3}({MlP}), fund={Fund:F3} → final={Final:F3} [{Mode}]",
+            "{Symbol} score breakdown: tech={Tech:F3}, sent={Sent:F3}({SentP}), claude={Claude:F3}({ClaudeP}), ml={Ml:F3}({MlP}), fund={Fund:F3}({FundP}) → final={Final:F3} [{Mode}]",
             symbol,
             techNorm,
             sentPresent   ? sentNorm   : 0.5, sentPresent   ? "aanwezig" : "neutraal",
             claudePresent ? claudeNorm : 0.5, claudePresent ? "aanwezig" : "neutraal",
             mlPresent     ? mlNorm     : 0.5, mlPresent     ? "aanwezig" : "neutraal",
-            fundNorm,
+            fundNorm, fundPresent ? "aanwezig" : "neutraal",
             finalScore,
             normalizeMissingSources ? "normalize" : "legacy");
 

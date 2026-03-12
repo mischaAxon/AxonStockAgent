@@ -18,6 +18,7 @@ builder.Services.AddHttpClient();
 builder.Services.AddScoped<ProviderManager>();
 builder.Services.AddScoped<AlgoSettingsService>();
 builder.Services.AddScoped<NewsService>();
+builder.Services.AddScoped<FundamentalsService>();
 
 // Legacy config (voor Telegram, Claude API key, etc.)
 builder.Services.Configure<ScreenerConfig>(
