@@ -153,7 +153,7 @@ public class AppDbContext : DbContext
             e.Property(x => x.Name).HasMaxLength(200);
             e.Property(x => x.Sector).HasMaxLength(100);
             e.Property(x => x.Industry).HasMaxLength(100);
-            e.Property(x => x.Country).HasMaxLength(5);
+            e.Property(x => x.Country).HasMaxLength(100);
             e.Property(x => x.Currency).HasMaxLength(10);
             e.Property(x => x.SymbolType).HasMaxLength(50);
             e.Property(x => x.Logo).HasMaxLength(500);
@@ -167,7 +167,7 @@ public class AppDbContext : DbContext
             e.HasIndex(x => x.ExchangeCode).IsUnique();
             e.Property(x => x.ExchangeCode).HasMaxLength(20);
             e.Property(x => x.DisplayName).HasMaxLength(100);
-            e.Property(x => x.Country).HasMaxLength(5);
+            e.Property(x => x.Country).HasMaxLength(100);
         });
     }
 }
