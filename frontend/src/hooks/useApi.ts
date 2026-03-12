@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient, useQueries } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { api } from '../services/api';
-import type { ApiResponse, PaginatedResponse, DashboardData, Signal, WatchlistItem, PortfolioItem, NewsArticle, SectorSentiment, TrendingSymbol, CompanyFundamentals, InsiderTransaction, AlgoSettingsResponse, ExchangeInfo, MarketSymbol, Quote } from '../types';
+import type { ApiResponse, PaginatedResponse, DashboardData, Signal, WatchlistItem, PortfolioItem, NewsArticle, SectorSentiment, TrendingSymbol, CompanyFundamentals, InsiderTransaction, AlgoSettingsResponse, ExchangeInfo, MarketSymbol, Quote, LatestSignalPerSymbol } from '../types';
 
 // Dashboard
 export function useDashboard() {
@@ -257,6 +257,15 @@ export function useAllSymbols(country?: string) {
     queryKey: ['exchanges', 'all-symbols', country],
     queryFn: () => api.get<ApiResponse<MarketSymbol[]>>(`/v1/exchanges/all-symbols${params}`),
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useLatestSignalsPerSymbol(days = 7) {
+  return useQuery({
+    queryKey: ['signals', 'latest-per-symbol', days],
+    queryFn: () => api.get<ApiResponse<LatestSignalPerSymbol[]>>(`/v1/signals/latest-per-symbol?days=${days}`),
+    staleTime: 60_000,
+    refetchInterval: 60_000,
   });
 }
 

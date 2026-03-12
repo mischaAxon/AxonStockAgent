@@ -208,3 +208,11 @@ export interface Quote {
   volume: number;
   timestamp: string;
 }
+
+export interface LatestSignalPerSymbol {
+  symbol: string;
+  finalVerdict: string;
+  finalScore: number;
+  direction: string;
+  createdAt: string;
+}

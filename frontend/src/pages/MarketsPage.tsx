@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, ChevronDown, ChevronRight, TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import { useAllSymbols, useBatchQuotes } from '../hooks/useApi';
-import type { MarketSymbol, Quote } from '../types';
+import { useAllSymbols, useBatchQuotes, useLatestSignalsPerSymbol } from '../hooks/useApi';
+import type { MarketSymbol, Quote, LatestSignalPerSymbol } from '../types';
 
 function countryFlag(code: string | null): string {
   if (!code || code.length !== 2) return '🌐';
@@ -48,9 +48,29 @@ function PriceChange({ quote }: { quote: Quote | undefined }) {
   );
 }
 
-function SymbolRow({ symbol, quote, onClick }: {
+function SignalBadge({ signal }: { signal: LatestSignalPerSymbol | undefined }) {
+  if (!signal) return null;
+
+  const colors: Record<string, string> = {
+    BUY:     'bg-green-500/15 text-green-400 border border-green-500/30',
+    SELL:    'bg-red-500/15 text-red-400 border border-red-500/30',
+    SQUEEZE: 'bg-yellow-500/15 text-yellow-400 border border-yellow-500/30',
+  };
+
+  const color = colors[signal.finalVerdict] ?? 'bg-gray-800 text-gray-500';
+  const pct = Math.round(signal.finalScore * 100);
+
+  return (
+    <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${color}`}>
+      {signal.finalVerdict} {pct}%
+    </span>
+  );
+}
+
+function SymbolRow({ symbol, quote, signal, onClick }: {
   symbol: MarketSymbol;
   quote: Quote | undefined;
+  signal: LatestSignalPerSymbol | undefined;
   onClick: () => void;
 }) {
   return (
@@ -81,6 +101,7 @@ function SymbolRow({ symbol, quote, onClick }: {
               {symbol.sector}
             </span>
           )}
+          <SignalBadge signal={signal} />
         </div>
         {symbol.name && (
           <p className="text-xs text-gray-500 truncate">{symbol.name}</p>
@@ -104,6 +125,15 @@ export default function MarketsPage() {
   const symbolTickers = useMemo(() => allSymbols.map(s => s.symbol), [allSymbols]);
   const { data: quotesData } = useBatchQuotes(symbolTickers);
   const quotes: Record<string, Quote> = quotesData?.data ?? {};
+
+  const { data: signalsData } = useLatestSignalsPerSymbol(7);
+  const signalMap = useMemo(() => {
+    const map: Record<string, LatestSignalPerSymbol> = {};
+    for (const sig of signalsData?.data ?? []) {
+      map[sig.symbol] = sig;
+    }
+    return map;
+  }, [signalsData]);
 
   const navigate = useNavigate();
 
@@ -230,6 +260,7 @@ export default function MarketsPage() {
                               key={sym.symbol}
                               symbol={sym}
                               quote={quotes[sym.symbol]}
+                              signal={signalMap[sym.symbol]}
                               onClick={() => navigate(`/stock/${sym.symbol}`)}
                             />
                           ))}

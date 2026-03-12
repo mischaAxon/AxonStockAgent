@@ -87,6 +87,21 @@ public class SignalsController : ControllerBase
         return Ok(new { data = new { totalSignals, todaySignals, weekSignals, verdictCounts } });
     }
 
+    [HttpGet("latest-per-symbol")]
+    public async Task<IActionResult> GetLatestPerSymbol([FromQuery] int days = 7)
+    {
+        var since = DateTime.UtcNow.AddDays(-Math.Min(days, 90));
+
+        var latestSignals = await _db.Signals
+            .Where(s => s.CreatedAt >= since)
+            .GroupBy(s => s.Symbol)
+            .Select(g => g.OrderByDescending(s => s.CreatedAt).First())
+            .Select(s => new { s.Symbol, s.FinalVerdict, s.FinalScore, s.Direction, s.CreatedAt })
+            .ToListAsync();
+
+        return Ok(new { data = latestSignals });
+    }
+
     [HttpGet("accuracy")]
     public async Task<IActionResult> GetAccuracy([FromQuery] int days = 30)
     {
