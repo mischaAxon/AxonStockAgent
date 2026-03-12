@@ -16,13 +16,14 @@ public class ExchangesController : ControllerBase
 
     /// <summary>
     /// Retourneert alle beurzen met hun symbooltellingen, gegroepeerd per land.
+    /// Leest uit TrackedExchanges (admin-geconfigureerd) + MarketSymbols.
     /// </summary>
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
-        var exchanges = await _db.Watchlist
-            .Where(w => w.IsActive && w.Exchange != null)
-            .GroupBy(w => new { w.Exchange, w.Country })
+        var exchanges = await _db.MarketSymbols
+            .Where(m => m.IsActive)
+            .GroupBy(m => new { m.Exchange, m.Country })
             .Select(g => new
             {
                 Exchange = g.Key.Exchange,
@@ -37,23 +38,23 @@ public class ExchangesController : ControllerBase
     }
 
     /// <summary>
-    /// Retourneert alle symbolen voor een specifieke beurs, met basisinfo.
+    /// Retourneert alle symbolen voor een specifieke beurs.
     /// </summary>
     [HttpGet("{exchange}/symbols")]
     public async Task<IActionResult> GetSymbols(string exchange)
     {
-        var symbols = await _db.Watchlist
-            .Where(w => w.IsActive && w.Exchange == exchange)
-            .OrderBy(w => w.Symbol)
-            .Select(w => new
+        var symbols = await _db.MarketSymbols
+            .Where(m => m.IsActive && m.Exchange == exchange)
+            .OrderBy(m => m.Symbol)
+            .Select(m => new
             {
-                w.Symbol,
-                w.Name,
-                w.Sector,
-                w.Industry,
-                w.Country,
-                w.Logo,
-                w.MarketCap
+                m.Symbol,
+                m.Name,
+                m.Sector,
+                m.Industry,
+                m.Country,
+                m.Logo,
+                m.MarketCap
             })
             .ToListAsync();
 
@@ -61,31 +62,33 @@ public class ExchangesController : ControllerBase
     }
 
     /// <summary>
-    /// Retourneert ALLE actieve symbolen met basisinfo, gegroepeerd per exchange.
-    /// Optioneel filteren op country.
+    /// Retourneert ALLE actieve symbolen uit MarketSymbols.
+    /// Optioneel filteren op country of exchange.
     /// </summary>
     [HttpGet("all-symbols")]
-    public async Task<IActionResult> GetAllSymbols([FromQuery] string? country = null)
+    public async Task<IActionResult> GetAllSymbols([FromQuery] string? country = null, [FromQuery] string? exchange = null)
     {
-        var query = _db.Watchlist.Where(w => w.IsActive);
+        var query = _db.MarketSymbols.Where(m => m.IsActive);
 
         if (!string.IsNullOrEmpty(country))
-            query = query.Where(w => w.Country == country);
+            query = query.Where(m => m.Country == country);
+        if (!string.IsNullOrEmpty(exchange))
+            query = query.Where(m => m.Exchange == exchange);
 
         var symbols = await query
-            .OrderBy(w => w.Country)
-            .ThenBy(w => w.Exchange)
-            .ThenBy(w => w.Symbol)
-            .Select(w => new
+            .OrderBy(m => m.Country)
+            .ThenBy(m => m.Exchange)
+            .ThenBy(m => m.Symbol)
+            .Select(m => new
             {
-                w.Symbol,
-                w.Name,
-                w.Exchange,
-                w.Sector,
-                w.Industry,
-                w.Country,
-                w.Logo,
-                w.MarketCap
+                m.Symbol,
+                m.Name,
+                Exchange = m.Exchange,
+                m.Sector,
+                m.Industry,
+                m.Country,
+                m.Logo,
+                m.MarketCap
             })
             .ToListAsync();
 

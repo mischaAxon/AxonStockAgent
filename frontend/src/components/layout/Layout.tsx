@@ -11,9 +11,10 @@ const navItems = [
 ];
 
 const adminItems = [
-  { to: '/admin/users',     label: 'Gebruikers', icon: Users    },
-  { to: '/admin/providers', label: 'Providers',  icon: Plug     },
+  { to: '/admin/users',     label: 'Gebruikers',   icon: Users    },
+  { to: '/admin/providers', label: 'Providers',    icon: Plug     },
   { to: '/admin/settings',  label: 'Instellingen', icon: Settings },
+  { to: '/admin/exchanges', label: 'Beurzen',      icon: Globe    },
 ];
 
 const navLinkClass = (isActive: boolean) =>

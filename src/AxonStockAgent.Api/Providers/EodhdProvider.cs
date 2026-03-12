@@ -128,6 +128,41 @@ public class EodhdProvider : IMarketDataProvider, INewsProvider, IFundamentalsPr
         }
     }
 
+    /// <summary>
+    /// Haalt alle symbolen van een exchange op met naam, type en valuta.
+    /// EODHD exchange-symbol-list retourneert: Code, Name, Country, Exchange, Currency, Type.
+    /// </summary>
+    public async Task<ExchangeSymbolInfo[]> GetExchangeSymbolsDetailed(string exchange)
+    {
+        await RateLimit();
+        var url = $"{BaseUrl}/exchange-symbol-list/{exchange}?api_token={_apiKey}&fmt=json&type=common_stock";
+        try
+        {
+            var json = await _http.GetStringAsync(url);
+            using var doc = JsonDocument.Parse(json);
+
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+                return Array.Empty<ExchangeSymbolInfo>();
+
+            return doc.RootElement.EnumerateArray()
+                .Select(s => new ExchangeSymbolInfo(
+                    Code:     SafeString(s, "Code"),
+                    Name:     SafeString(s, "Name"),
+                    Country:  SafeString(s, "Country"),
+                    Exchange: SafeString(s, "Exchange"),
+                    Currency: SafeString(s, "Currency"),
+                    Type:     SafeString(s, "Type")
+                ))
+                .Where(s => !string.IsNullOrEmpty(s.Code))
+                .ToArray();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("EODHD GetExchangeSymbolsDetailed mislukt voor {Exchange}: {Message}", exchange, ex.Message);
+            return Array.Empty<ExchangeSymbolInfo>();
+        }
+    }
+
     public async Task<string[]> GetSymbols(string exchange)
     {
         await RateLimit();
@@ -436,3 +471,5 @@ public class EodhdProvider : IMarketDataProvider, INewsProvider, IFundamentalsPr
         );
     }
 }
+
+public record ExchangeSymbolInfo(string Code, string Name, string Country, string Exchange, string Currency, string Type);

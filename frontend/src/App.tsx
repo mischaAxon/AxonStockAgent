@@ -9,6 +9,7 @@ import RegisterPage from './pages/RegisterPage';
 import AdminUsersPage from './pages/AdminUsersPage';
 import AdminProvidersPage from './pages/AdminProvidersPage';
 import AdminSettingsPage from './pages/AdminSettingsPage';
+import AdminExchangesPage from './pages/AdminExchangesPage';
 import StockDetailPage from './pages/StockDetailPage';
 import MarketsPage from './pages/MarketsPage';
 
@@ -55,6 +56,14 @@ export default function App() {
           element={
             <ProtectedRoute requireAdmin>
               <AdminSettingsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/exchanges"
+          element={
+            <ProtectedRoute requireAdmin>
+              <AdminExchangesPage />
             </ProtectedRoute>
           }
         />

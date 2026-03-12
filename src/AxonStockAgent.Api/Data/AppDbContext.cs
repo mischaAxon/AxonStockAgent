@@ -20,6 +20,8 @@ public class AppDbContext : DbContext
     public DbSet<InsiderTransactionEntity> InsiderTransactions => Set<InsiderTransactionEntity>();
     public DbSet<AlgoSettingsEntity> AlgoSettings => Set<AlgoSettingsEntity>();
     public DbSet<ClaudeApiLogEntity> ClaudeApiLogs => Set<ClaudeApiLogEntity>();
+    public DbSet<MarketSymbolEntity> MarketSymbols { get; set; }
+    public DbSet<TrackedExchangeEntity> TrackedExchanges { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -136,6 +138,36 @@ public class AppDbContext : DbContext
             e.HasIndex(x => x.Status);
             e.HasIndex(x => x.CreatedAt);
             e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
+        });
+
+        // MarketSymbols
+        modelBuilder.Entity<MarketSymbolEntity>(e =>
+        {
+            e.ToTable("market_symbols");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.Symbol, x.Exchange }).IsUnique();
+            e.HasIndex(x => x.Exchange);
+            e.HasIndex(x => x.Country);
+            e.Property(x => x.Symbol).HasMaxLength(50);
+            e.Property(x => x.Exchange).HasMaxLength(20);
+            e.Property(x => x.Name).HasMaxLength(200);
+            e.Property(x => x.Sector).HasMaxLength(100);
+            e.Property(x => x.Industry).HasMaxLength(100);
+            e.Property(x => x.Country).HasMaxLength(5);
+            e.Property(x => x.Currency).HasMaxLength(10);
+            e.Property(x => x.SymbolType).HasMaxLength(50);
+            e.Property(x => x.Logo).HasMaxLength(500);
+        });
+
+        // TrackedExchanges
+        modelBuilder.Entity<TrackedExchangeEntity>(e =>
+        {
+            e.ToTable("tracked_exchanges");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.ExchangeCode).IsUnique();
+            e.Property(x => x.ExchangeCode).HasMaxLength(20);
+            e.Property(x => x.DisplayName).HasMaxLength(100);
+            e.Property(x => x.Country).HasMaxLength(5);
         });
     }
 }

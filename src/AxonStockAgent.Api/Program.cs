@@ -74,6 +74,7 @@ builder.Services.AddHostedService<NewsFetcherService>();
 builder.Services.AddScoped<SignalOutcomeService>();
 builder.Services.AddHostedService<OutcomeTrackerService>();
 builder.Services.AddScoped<QuoteCacheService>();
+builder.Services.AddScoped<ExchangeImportService>();
 
 var app = builder.Build();
 

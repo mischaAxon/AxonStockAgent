@@ -1,4 +1,5 @@
 using AxonStockAgent.Api.Data;
+using AxonStockAgent.Api.Data.Entities;
 using AxonStockAgent.Api.Services;
 using AxonStockAgent.Core.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -173,8 +174,79 @@ public class AdminController : ControllerBase
 
         return Ok(new { data = new { name, health, detail, checkedAt = config.LastHealthCheck } });
     }
+
+    // ── Tracked Exchanges ──────────────────────────────────────────────────────
+
+    [HttpGet("exchanges")]
+    public async Task<IActionResult> GetTrackedExchanges()
+    {
+        var exchanges = await _db.TrackedExchanges
+            .OrderBy(e => e.Country)
+            .ThenBy(e => e.DisplayName)
+            .ToListAsync();
+        return Ok(new { data = exchanges });
+    }
+
+    [HttpPost("exchanges")]
+    public async Task<IActionResult> AddTrackedExchange([FromBody] AddExchangeRequest request)
+    {
+        var exists = await _db.TrackedExchanges.AnyAsync(e => e.ExchangeCode == request.ExchangeCode);
+        if (exists) return Conflict(new { error = $"Exchange '{request.ExchangeCode}' bestaat al" });
+
+        var entity = new TrackedExchangeEntity
+        {
+            ExchangeCode = request.ExchangeCode,
+            DisplayName  = request.DisplayName ?? request.ExchangeCode,
+            Country      = request.Country ?? "XX",
+            IsEnabled    = true,
+        };
+        _db.TrackedExchanges.Add(entity);
+        await _db.SaveChangesAsync();
+
+        return Ok(new { data = entity });
+    }
+
+    [HttpPut("exchanges/{id:int}")]
+    public async Task<IActionResult> UpdateTrackedExchange(int id, [FromBody] UpdateExchangeRequest request)
+    {
+        var exchange = await _db.TrackedExchanges.FindAsync(id);
+        if (exchange == null) return NotFound();
+
+        if (request.IsEnabled.HasValue) exchange.IsEnabled = request.IsEnabled.Value;
+        if (request.DisplayName != null) exchange.DisplayName = request.DisplayName;
+
+        await _db.SaveChangesAsync();
+        return Ok(new { data = exchange });
+    }
+
+    [HttpDelete("exchanges/{id:int}")]
+    public async Task<IActionResult> DeleteTrackedExchange(int id)
+    {
+        var exchange = await _db.TrackedExchanges.FindAsync(id);
+        if (exchange == null) return NotFound();
+
+        // Verwijder ook alle geïmporteerde symbolen voor deze beurs
+        var symbols = await _db.MarketSymbols.Where(m => m.Exchange == exchange.ExchangeCode).ToListAsync();
+        _db.MarketSymbols.RemoveRange(symbols);
+        _db.TrackedExchanges.Remove(exchange);
+        await _db.SaveChangesAsync();
+
+        return Ok(new { message = $"Exchange '{exchange.ExchangeCode}' verwijderd met {symbols.Count} symbolen" });
+    }
+
+    [HttpPost("exchanges/{id:int}/import")]
+    public async Task<IActionResult> ImportExchangeSymbols(int id, [FromServices] ExchangeImportService importService)
+    {
+        var exchange = await _db.TrackedExchanges.FindAsync(id);
+        if (exchange == null) return NotFound();
+
+        var count = await importService.ImportExchangeSymbols(exchange.ExchangeCode);
+        return Ok(new { data = new { exchange = exchange.ExchangeCode, importedCount = count } });
+    }
 }
 
 public record UpdateUserRequest(string? Role = null, bool? IsActive = null);
 public record UpdateProviderRequest(bool? IsEnabled = null, string? ApiKey = null, string? ConfigJson = null);
 public record UpdateSettingRequest(string Value);
+public record AddExchangeRequest(string ExchangeCode, string? DisplayName = null, string? Country = null);
+public record UpdateExchangeRequest(bool? IsEnabled = null, string? DisplayName = null);
