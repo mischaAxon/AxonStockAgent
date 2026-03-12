@@ -24,15 +24,18 @@ public class ScreenerWorker : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<ScreenerWorker> _logger;
     private readonly ScreenerConfig _config;
+    private readonly CandleCacheService _candleCache;
 
     public ScreenerWorker(
         IServiceScopeFactory scopeFactory,
         ILogger<ScreenerWorker> logger,
-        IOptions<ScreenerConfig> config)
+        IOptions<ScreenerConfig> config,
+        CandleCacheService candleCache)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
         _config = config.Value;
+        _candleCache = candleCache;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -124,6 +127,13 @@ public class ScreenerWorker : BackgroundService
         var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
         var httpFactory = scope.ServiceProvider.GetRequiredService<IHttpClientFactory>();
         var fundamentalsService = scope.ServiceProvider.GetRequiredService<FundamentalsService>();
+
+        // Stel candle cache modus in op basis van scan-modus
+        var realtimeMode = await algoSettings.GetBoolAsync("scan", "realtime_mode", false);
+        _candleCache.SetMode(realtimeMode);
+        var cacheStatus = _candleCache.GetStatus();
+        _logger.LogInformation("Candle cache: mode={Mode}, TTL={Ttl}",
+            cacheStatus.RealtimeMode ? "realtime" : "EOD", cacheStatus.Ttl);
 
         // ── 1. Haal actieve symbolen op ──
         var symbols = await db.Watchlist
@@ -252,8 +262,8 @@ public class ScreenerWorker : BackgroundService
         int squeezeMinBars, bool volatilityRiskEnabled,
         CancellationToken ct)
     {
-        // ── Fetch candles ──
-        var candles = await marketProvider.GetCandles(symbol, _config.Timeframe, lookbackDays);
+        // ── Fetch candles (via cache) ──
+        var candles = await _candleCache.GetCandlesAsync(marketProvider, symbol, _config.Timeframe, lookbackDays);
         if (candles == null || candles.Length < 50)
         {
             _logger.LogDebug("Onvoldoende candles voor {Symbol}: {Count}", symbol, candles?.Length ?? 0);
