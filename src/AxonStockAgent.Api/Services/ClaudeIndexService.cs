@@ -11,15 +11,15 @@ namespace AxonStockAgent.Api.Services;
 public class ClaudeIndexService
 {
     private readonly HttpClient _http;
-    private readonly IConfiguration _config;
+    private readonly ClaudeApiKeyProvider _keyProvider;
     private readonly ILogger<ClaudeIndexService> _logger;
 
     private const string Model = "claude-sonnet-4-20250514";
 
-    public ClaudeIndexService(HttpClient http, IConfiguration config, ILogger<ClaudeIndexService> logger)
+    public ClaudeIndexService(HttpClient http, ClaudeApiKeyProvider keyProvider, ILogger<ClaudeIndexService> logger)
     {
         _http = http;
-        _config = config;
+        _keyProvider = keyProvider;
         _logger = logger;
     }
 
@@ -29,7 +29,7 @@ public class ClaudeIndexService
     /// </summary>
     public async Task<IndexComponentResult[]> GetIndexComponentsViaAI(string indexName, string exchangeCode)
     {
-        var apiKey = _config["Claude:ApiKey"] ?? _config["ANTHROPIC_API_KEY"] ?? "";
+        var apiKey = await _keyProvider.GetApiKeyAsync() ?? "";
         if (string.IsNullOrEmpty(apiKey))
         {
             _logger.LogWarning("Claude API key niet geconfigureerd");

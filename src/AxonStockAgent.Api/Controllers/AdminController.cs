@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using AxonStockAgent.Api.Data;
 using AxonStockAgent.Api.Data.Entities;
 using AxonStockAgent.Api.Services;
@@ -130,6 +131,55 @@ public class AdminController : ControllerBase
         var config = await _db.DataProviders.FirstOrDefaultAsync(p => p.Name == name);
         if (config == null) return NotFound(new { error = $"Provider '{name}' niet gevonden" });
         if (!config.IsEnabled) return BadRequest(new { error = "Provider is niet ingeschakeld" });
+
+        // Special case: Claude AI provider (geen standaard interface)
+        if (name == "claude")
+        {
+            var keyProvider = HttpContext.RequestServices.GetRequiredService<ClaudeApiKeyProvider>();
+            var apiKey = await keyProvider.GetApiKeyAsync();
+
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                config.HealthStatus    = "down";
+                config.LastHealthCheck = DateTime.UtcNow;
+                config.UpdatedAt       = DateTime.UtcNow;
+                await _db.SaveChangesAsync();
+                return Ok(new { data = new { name, health = "down", detail = "Geen API key geconfigureerd", checkedAt = config.LastHealthCheck } });
+            }
+
+            string claudeHealth;
+            string? claudeDetail = null;
+            try
+            {
+                var httpFactory = HttpContext.RequestServices.GetRequiredService<IHttpClientFactory>();
+                var http = httpFactory.CreateClient();
+                var req = new HttpRequestMessage(HttpMethod.Post, "https://api.anthropic.com/v1/messages")
+                {
+                    Content = JsonContent.Create(new
+                    {
+                        model      = "claude-sonnet-4-20250514",
+                        max_tokens = 10,
+                        messages   = new[] { new { role = "user", content = "ping" } }
+                    })
+                };
+                req.Headers.Add("x-api-key", apiKey);
+                req.Headers.Add("anthropic-version", "2023-06-01");
+                var response = await http.SendAsync(req);
+                claudeHealth = response.IsSuccessStatusCode ? "healthy" : "degraded";
+                claudeDetail = response.IsSuccessStatusCode ? null : $"HTTP {(int)response.StatusCode}";
+            }
+            catch (Exception ex)
+            {
+                claudeHealth = "down";
+                claudeDetail = ex.Message;
+            }
+
+            config.HealthStatus    = claudeHealth;
+            config.LastHealthCheck = DateTime.UtcNow;
+            config.UpdatedAt       = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+            return Ok(new { data = new { name, health = claudeHealth, detail = claudeDetail, checkedAt = config.LastHealthCheck } });
+        }
 
         var provider = await _providers.GetProviderByName(name);
         if (provider == null)

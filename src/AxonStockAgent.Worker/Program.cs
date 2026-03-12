@@ -1,4 +1,5 @@
 using AxonStockAgent.Api.Data;
+using AxonStockAgent.Api.Data.Entities;
 using AxonStockAgent.Api.Services;
 using AxonStockAgent.Core.Models;
 using AxonStockAgent.Worker;
@@ -28,6 +29,7 @@ builder.Services.AddScoped<ProviderManager>();
 builder.Services.AddScoped<AlgoSettingsService>();
 builder.Services.AddScoped<NewsService>();
 builder.Services.AddScoped<FundamentalsService>();
+builder.Services.AddScoped<ClaudeApiKeyProvider>();
 
 // Legacy config (voor Telegram, Claude API key, etc.)
 builder.Services.Configure<ScreenerConfig>(
@@ -37,4 +39,28 @@ builder.Services.Configure<ScreenerConfig>(
 builder.Services.AddHostedService<ScreenerWorker>();
 
 var host = builder.Build();
+
+// Ensure Claude provider exists
+using (var scope = host.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    if (!await db.DataProviders.AnyAsync(p => p.Name == "claude"))
+    {
+        db.DataProviders.Add(new DataProviderEntity
+        {
+            Name               = "claude",
+            DisplayName        = "Claude AI (Anthropic)",
+            ProviderType       = "ai",
+            IsEnabled          = false,
+            RateLimitPerMinute = 50,
+            SupportsEu         = true,
+            SupportsUs         = true,
+            IsFree             = false,
+            MonthlyCost        = 0,
+            HealthStatus       = "unknown",
+        });
+        await db.SaveChangesAsync();
+    }
+}
+
 host.Run();

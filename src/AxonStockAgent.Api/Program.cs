@@ -1,6 +1,7 @@
 using System.Text;
 using AxonStockAgent.Api.BackgroundServices;
 using AxonStockAgent.Api.Data;
+using AxonStockAgent.Api.Data.Entities;
 using AxonStockAgent.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -77,6 +78,7 @@ builder.Services.AddScoped<QuoteCacheService>();
 builder.Services.AddScoped<ExchangeImportService>();
 builder.Services.AddScoped<IndexImportService>();
 builder.Services.AddScoped<ClaudeIndexService>();
+builder.Services.AddScoped<ClaudeApiKeyProvider>();
 
 var app = builder.Build();
 
@@ -85,6 +87,29 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
+}
+
+// Ensure Claude provider exists
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    if (!await db.DataProviders.AnyAsync(p => p.Name == "claude"))
+    {
+        db.DataProviders.Add(new DataProviderEntity
+        {
+            Name               = "claude",
+            DisplayName        = "Claude AI (Anthropic)",
+            ProviderType       = "ai",
+            IsEnabled          = false,
+            RateLimitPerMinute = 50,
+            SupportsEu         = true,
+            SupportsUs         = true,
+            IsFree             = false,
+            MonthlyCost        = 0,
+            HealthStatus       = "unknown",
+        });
+        await db.SaveChangesAsync();
+    }
 }
 
 // Middleware

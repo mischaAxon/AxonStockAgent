@@ -182,9 +182,12 @@ public class ScreenerWorker : BackgroundService
             return;
         }
 
+        var claudeKeyProvider = scope.ServiceProvider.GetRequiredService<ClaudeApiKeyProvider>();
+        var claudeApiKey = await claudeKeyProvider.GetApiKeyAsync() ?? "";
+
         var claudeService = new ClaudeAnalysisService(
             httpFactory.CreateClient("claude"),
-            _config.ClaudeApiKey,
+            claudeApiKey,
             loggerFactory.CreateLogger<ClaudeAnalysisService>(),
             _scopeFactory);
 
