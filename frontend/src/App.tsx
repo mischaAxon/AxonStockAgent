@@ -13,6 +13,7 @@ import AdminUsersPage from './pages/AdminUsersPage';
 import AdminProvidersPage from './pages/AdminProvidersPage';
 import AdminSettingsPage from './pages/AdminSettingsPage';
 import StockDetailPage from './pages/StockDetailPage';
+import MarketsPage from './pages/MarketsPage';
 
 export default function App() {
   return (
@@ -34,6 +35,7 @@ export default function App() {
         <Route path="/watchlist" element={<WatchlistPage />} />
         <Route path="/sectors"   element={<SectorsPage />} />
         <Route path="/portfolio" element={<PortfolioPage />} />
+        <Route path="/markets"   element={<MarketsPage />} />
         <Route path="/news"      element={<NewsPage />} />
         <Route path="/stock/:symbol" element={<StockDetailPage />} />
 

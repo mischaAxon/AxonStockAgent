@@ -178,3 +178,33 @@ export interface AlgoSetting {
 }
 
 export type AlgoSettingsResponse = Record<string, AlgoSetting[]>;
+
+// Exchange & Market data
+export interface ExchangeInfo {
+  exchange: string;
+  country: string;
+  symbolCount: number;
+}
+
+export interface MarketSymbol {
+  symbol: string;
+  name: string | null;
+  exchange: string | null;
+  sector: string | null;
+  industry: string | null;
+  country: string | null;
+  logo: string | null;
+  marketCap: number | null;
+}
+
+export interface Quote {
+  currentPrice: number;
+  previousClose: number;
+  change: number;
+  changePercent: number;
+  high: number;
+  low: number;
+  open: number;
+  volume: number;
+  timestamp: string;
+}

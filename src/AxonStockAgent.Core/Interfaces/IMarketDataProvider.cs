@@ -9,4 +9,5 @@ public interface IMarketDataProvider
     string[] SupportedExchanges { get; }
     Task<Candle[]?> GetCandles(string symbol, string resolution, int count);
     Task<string[]> GetSymbols(string exchange);
+    Task<Quote?> GetQuote(string symbol);
 }

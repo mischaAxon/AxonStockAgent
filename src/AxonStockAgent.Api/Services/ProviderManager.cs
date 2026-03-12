@@ -1,6 +1,7 @@
 using AxonStockAgent.Api.Data;
 using AxonStockAgent.Api.Providers;
 using AxonStockAgent.Core.Interfaces;
+using AxonStockAgent.Core.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace AxonStockAgent.Api.Services;
@@ -134,6 +135,14 @@ public class ProviderManager
         return (object?)_marketData!.FirstOrDefault(p => p.Name == name)
             ?? (object?)_news!.FirstOrDefault(p => p.Name == name)
             ?? (object?)_fundamentals!.FirstOrDefault(p => p.Name == name);
+    }
+
+    /// <summary>Haal een realtime/delayed quote op voor een symbool.</summary>
+    public async Task<Quote?> GetQuote(string symbol)
+    {
+        var provider = await GetMarketDataProvider();
+        if (provider == null) return null;
+        return await provider.GetQuote(symbol);
     }
 
     /// <summary>Zoek symbolen op ticker of bedrijfsnaam via actieve providers.</summary>

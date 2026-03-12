@@ -104,6 +104,48 @@ public class FinnhubProvider : IMarketDataProvider, INewsProvider, IFundamentals
         }
     }
 
+    public async Task<Quote?> GetQuote(string symbol)
+    {
+        await RateLimit();
+        var url = $"{BaseUrl}/quote?symbol={symbol}&token={_apiKey}";
+        try
+        {
+            var json = await _http.GetStringAsync(url);
+            using var doc = JsonDocument.Parse(json);
+            var r = doc.RootElement;
+
+            var c = r.TryGetProperty("c", out var cp) ? cp.GetDouble() : 0;
+            if (c == 0) return null; // symbool niet gevonden
+
+            var pc = r.TryGetProperty("pc", out var pcp) ? pcp.GetDouble() : 0;
+            var t  = r.TryGetProperty("t",  out var tp)  ? tp.GetInt64()   : DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+            return new Quote
+            {
+                Symbol        = symbol,
+                CurrentPrice  = c,
+                PreviousClose = pc,
+                Change        = c - pc,
+                ChangePercent = pc > 0 ? (c - pc) / pc * 100 : 0,
+                High          = r.TryGetProperty("h", out var h) ? h.GetDouble() : 0,
+                Low           = r.TryGetProperty("l", out var l) ? l.GetDouble() : 0,
+                Open          = r.TryGetProperty("o", out var o) ? o.GetDouble() : 0,
+                Volume        = r.TryGetProperty("v", out var v) ? v.GetInt64()  : 0,
+                Timestamp     = DateTimeOffset.FromUnixTimeSeconds(t).UtcDateTime
+            };
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
+        {
+            _logger.LogDebug("Finnhub: quote voor {Symbol} niet beschikbaar op huidig plan (403)", symbol);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("GetQuote mislukt voor {Symbol}: {Message}", symbol, ex.Message);
+            return null;
+        }
+    }
+
     // ── INewsProvider ──────────────────────────────────────────────────────────
 
     public async Task<NewsArticle[]> GetNews(string? symbol = null, int limit = 20)

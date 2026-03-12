@@ -149,6 +149,44 @@ public class EodhdProvider : IMarketDataProvider, INewsProvider, IFundamentalsPr
         }
     }
 
+    public async Task<Quote?> GetQuote(string symbol)
+    {
+        await RateLimit();
+        var eodSymbol = ToEodhdSymbol(symbol);
+        var url = $"{BaseUrl}/real-time/{eodSymbol}?api_token={_apiKey}&fmt=json";
+        try
+        {
+            var json = await _http.GetStringAsync(url);
+            using var doc = JsonDocument.Parse(json);
+            var r = doc.RootElement;
+
+            var c = r.TryGetProperty("close", out var cp) ? cp.GetDouble() : 0;
+            if (c == 0) return null;
+
+            var pc = r.TryGetProperty("previousClose", out var pcp) ? pcp.GetDouble() : 0;
+            var change = c - pc;
+
+            return new Quote
+            {
+                Symbol        = symbol,
+                CurrentPrice  = c,
+                PreviousClose = pc,
+                Change        = change,
+                ChangePercent = pc > 0 ? change / pc * 100 : 0,
+                High          = r.TryGetProperty("high",   out var h) ? h.GetDouble() : 0,
+                Low           = r.TryGetProperty("low",    out var l) ? l.GetDouble() : 0,
+                Open          = r.TryGetProperty("open",   out var o) ? o.GetDouble() : 0,
+                Volume        = r.TryGetProperty("volume", out var v) ? v.GetInt64()  : 0,
+                Timestamp     = DateTime.UtcNow
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("EODHD GetQuote mislukt voor {Symbol}: {Message}", symbol, ex.Message);
+            return null;
+        }
+    }
+
     // ── INewsProvider ────────────────────────────────────────────────────────
 
     public async Task<NewsArticle[]> GetNews(string? symbol = null, int limit = 20)

@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
-import type { ApiResponse, PaginatedResponse, DashboardData, Signal, WatchlistItem, PortfolioItem, NewsArticle, SectorSentiment, TrendingSymbol, CompanyFundamentals, InsiderTransaction, AlgoSettingsResponse } from '../types';
+import type { ApiResponse, PaginatedResponse, DashboardData, Signal, WatchlistItem, PortfolioItem, NewsArticle, SectorSentiment, TrendingSymbol, CompanyFundamentals, InsiderTransaction, AlgoSettingsResponse, ExchangeInfo, MarketSymbol, Quote } from '../types';
 
 // Dashboard
 export function useDashboard() {
@@ -230,5 +230,42 @@ export function useResetAlgoSettings() {
   return useMutation({
     mutationFn: () => api.post('/v1/admin/settings/reset', {}),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'settings'] }),
+  });
+}
+
+// Exchanges & Markets
+export function useExchanges() {
+  return useQuery({
+    queryKey: ['exchanges'],
+    queryFn: () => api.get<ApiResponse<ExchangeInfo[]>>('/v1/exchanges'),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useExchangeSymbols(exchange: string) {
+  return useQuery({
+    queryKey: ['exchanges', exchange, 'symbols'],
+    queryFn: () => api.get<ApiResponse<MarketSymbol[]>>(`/v1/exchanges/${encodeURIComponent(exchange)}/symbols`),
+    enabled: !!exchange,
+  });
+}
+
+export function useAllSymbols(country?: string) {
+  const params = country ? `?country=${country}` : '';
+  return useQuery({
+    queryKey: ['exchanges', 'all-symbols', country],
+    queryFn: () => api.get<ApiResponse<MarketSymbol[]>>(`/v1/exchanges/all-symbols${params}`),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useBatchQuotes(symbols: string[]) {
+  const symbolStr = symbols.join(',');
+  return useQuery({
+    queryKey: ['quotes', symbolStr],
+    queryFn: () => api.get<ApiResponse<Record<string, Quote>>>(`/v1/quotes/batch?symbols=${symbolStr}`),
+    enabled: symbols.length > 0,
+    refetchInterval: 30_000,
+    staleTime: 15_000,
   });
 }
