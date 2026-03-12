@@ -96,7 +96,22 @@ public class SignalsController : ControllerBase
             .Where(s => s.CreatedAt >= since)
             .GroupBy(s => s.Symbol)
             .Select(g => g.OrderByDescending(s => s.CreatedAt).First())
-            .Select(s => new { s.Symbol, s.FinalVerdict, s.FinalScore, s.Direction, s.CreatedAt })
+            .Select(s => new
+            {
+                s.Symbol,
+                s.FinalVerdict,
+                s.FinalScore,
+                s.Direction,
+                s.CreatedAt,
+                s.TrendStatus,
+                s.MomentumStatus,
+                s.VolatilityStatus,
+                s.VolumeStatus,
+                s.TechScore,
+                s.SentimentScore,
+                s.ClaudeConfidence,
+                s.ClaudeDirection
+            })
             .ToListAsync();
 
         return Ok(new { data = latestSignals });

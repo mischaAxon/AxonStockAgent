@@ -1,15 +1,12 @@
 import { Outlet, NavLink } from 'react-router-dom';
-import { LayoutDashboard, Activity, Eye, Grid2x2, Briefcase, Users, Plug, LogOut, Newspaper, Settings, Globe } from 'lucide-react';
+import { Activity, Grid2x2, Users, Plug, LogOut, Newspaper, Settings, Globe } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { NewsTicker } from '../NewsTicker';
 
 const navItems = [
-  { to: '/',          label: 'Dashboard', icon: LayoutDashboard, end: true  },
+  { to: '/',          label: 'Markets',   icon: Globe,           end: true  },
   { to: '/signals',   label: 'Signalen',  icon: Activity,        end: false },
-  { to: '/watchlist', label: 'Watchlist', icon: Eye,             end: false },
   { to: '/sectors',   label: 'Sectoren',  icon: Grid2x2,         end: false },
-  { to: '/markets',   label: 'Markets',   icon: Globe,           end: false },
-  { to: '/portfolio', label: 'Portfolio', icon: Briefcase,       end: false },
   { to: '/news',      label: 'Nieuws',    icon: Newspaper,       end: false },
 ];
 

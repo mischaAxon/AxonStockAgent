@@ -215,4 +215,12 @@ export interface LatestSignalPerSymbol {
   finalScore: number;
   direction: string;
   createdAt: string;
+  trendStatus: string | null;
+  momentumStatus: string | null;
+  volatilityStatus: string | null;
+  volumeStatus: string | null;
+  techScore: number;
+  sentimentScore: number | null;
+  claudeConfidence: number | null;
+  claudeDirection: string | null;
 }

@@ -267,8 +267,8 @@ export default function StockDetailPage() {
   return (
     <div className="space-y-6">
       {/* Back link */}
-      <Link to="/watchlist" className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors">
-        <ArrowLeft size={14} /> Terug naar Watchlist
+      <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors">
+        <ArrowLeft size={14} /> Terug naar Markets
       </Link>
 
       {/* Header */}
