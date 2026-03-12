@@ -92,29 +92,32 @@ public class SignalsController : ControllerBase
     {
         var since = DateTime.UtcNow.AddDays(-Math.Min(days, 90));
 
+        // EF Core kan GroupBy+First() niet naar SQL vertalen — gebruik DISTINCT ON (PostgreSQL)
         var latestSignals = await _db.Signals
-            .Where(s => s.CreatedAt >= since)
-            .GroupBy(s => s.Symbol)
-            .Select(g => g.OrderByDescending(s => s.CreatedAt).First())
-            .Select(s => new
-            {
-                s.Symbol,
-                s.FinalVerdict,
-                s.FinalScore,
-                s.Direction,
-                s.CreatedAt,
-                s.TrendStatus,
-                s.MomentumStatus,
-                s.VolatilityStatus,
-                s.VolumeStatus,
-                s.TechScore,
-                s.SentimentScore,
-                s.ClaudeConfidence,
-                s.ClaudeDirection
-            })
+            .FromSqlInterpolated($@"
+                SELECT DISTINCT ON (symbol) *
+                FROM signals
+                WHERE created_at >= {since}
+                ORDER BY symbol, created_at DESC")
+            .AsNoTracking()
             .ToListAsync();
 
-        return Ok(new { data = latestSignals });
+        return Ok(new { data = latestSignals.Select(s => new
+        {
+            s.Symbol,
+            s.FinalVerdict,
+            s.FinalScore,
+            s.Direction,
+            s.CreatedAt,
+            s.TrendStatus,
+            s.MomentumStatus,
+            s.VolatilityStatus,
+            s.VolumeStatus,
+            s.TechScore,
+            s.SentimentScore,
+            s.ClaudeConfidence,
+            s.ClaudeDirection
+        })});
     }
 
     [HttpGet("accuracy")]
