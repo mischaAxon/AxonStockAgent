@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2, Download, Globe, Database } from 'lucide-react';
+import { Plus, Trash2, Download, Globe, Sparkles } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 
@@ -60,12 +60,12 @@ export default function AdminExchangesPage() {
   const queryClient = useQueryClient();
   const [importing, setImporting] = useState<number | null>(null);
   const [importingIndex, setImportingIndex] = useState<number | null>(null);
-  const [fillingIndex, setFillingIndex] = useState<number | null>(null);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'warning' | 'error' } | null>(null);
+  const [aiImportingIndex, setAiImportingIndex] = useState<number | null>(null);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'warning' | 'error'; message: string } | null>(null);
 
   function showToast(message: string, type: 'success' | 'warning' | 'error') {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 5000);
+    setFeedback({ message, type });
+    setTimeout(() => setFeedback(null), 5000);
   }
 
   // ── Exchanges ──────────────────────────────────────────────────────────────
@@ -133,41 +133,42 @@ export default function AdminExchangesPage() {
 
   async function handleImportIndex(id: number) {
     setImportingIndex(id);
+    setFeedback(null);
     try {
-      const result = await api.post<{ data: { index: string; importedCount: number; warning?: string } }>(`/v1/admin/indices/${id}/import`, {});
+      const result: any = await api.post(`/v1/admin/indices/${id}/import`, {});
+      const count = result?.data?.importedCount ?? 0;
+      const source = result?.data?.source ?? 'unknown';
+      if (count > 0) {
+        showToast(`${count} componenten geïmporteerd via ${source === 'finnhub' ? 'Finnhub' : source === 'eodhd' ? 'EODHD' : source}.`, 'success');
+      } else {
+        showToast('Geen data via API. Probeer "AI Import" (✨) als alternatief.', 'error');
+      }
       queryClient.invalidateQueries({ queryKey: ['admin', 'indices'] });
       queryClient.invalidateQueries({ queryKey: ['exchanges'] });
-      const d = result?.data;
-      if (d?.warning) {
-        showToast(d.warning, 'warning');
-      } else if (d?.importedCount > 0) {
-        showToast(`${d.index}: ${d.importedCount} componenten geïmporteerd.`, 'success');
-      } else {
-        showToast('Import mislukt: 0 componenten gevonden.', 'error');
-      }
-    } catch {
-      showToast('Import mislukt. Controleer de API logs.', 'error');
+    } catch (err: any) {
+      showToast(`API import mislukt: ${err?.message ?? 'Onbekende fout'}`, 'error');
     } finally {
       setImportingIndex(null);
     }
   }
 
-  async function handleFillFromExchange(id: number) {
-    setFillingIndex(id);
+  async function handleAiImportIndex(id: number) {
+    setAiImportingIndex(id);
+    setFeedback(null);
     try {
-      const result = await api.post<{ data: { index: string; importedCount: number } }>(`/v1/admin/indices/${id}/fill-from-exchange`, {});
+      const result: any = await api.post(`/v1/admin/indices/${id}/import-ai`, {});
+      const count = result?.data?.importedCount ?? 0;
+      if (count > 0) {
+        showToast(`${count} componenten geïmporteerd via Claude AI.`, 'success');
+      } else {
+        showToast('Claude kon geen componenten ophalen. Controleer of de Claude API key is geconfigureerd.', 'error');
+      }
       queryClient.invalidateQueries({ queryKey: ['admin', 'indices'] });
       queryClient.invalidateQueries({ queryKey: ['exchanges'] });
-      const d = result?.data;
-      if (d?.importedCount > 0) {
-        showToast(`${d.index}: gevuld met ${d.importedCount} symbolen van de beurs.`, 'success');
-      } else {
-        showToast('Geen symbolen gevonden. Importeer eerst de beurs.', 'error');
-      }
-    } catch (e: any) {
-      showToast(e?.message ?? 'Mislukt. Controleer of de beurs al geïmporteerd is.', 'error');
+    } catch (err: any) {
+      showToast(`AI import mislukt: ${err?.message ?? 'Onbekende fout'}`, 'error');
     } finally {
-      setFillingIndex(null);
+      setAiImportingIndex(null);
     }
   }
 
@@ -178,13 +179,13 @@ export default function AdminExchangesPage() {
   return (
     <div>
       {/* Toast */}
-      {toast && (
+      {feedback && (
         <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-xl text-sm font-medium max-w-sm ${
-          toast.type === 'success' ? 'bg-green-900 border border-green-600 text-green-200'
-          : toast.type === 'warning' ? 'bg-yellow-900 border border-yellow-600 text-yellow-200'
+          feedback.type === 'success' ? 'bg-green-900 border border-green-600 text-green-200'
+          : feedback.type === 'warning' ? 'bg-yellow-900 border border-yellow-600 text-yellow-200'
           : 'bg-red-900 border border-red-600 text-red-200'
         }`}>
-          {toast.message}
+          {feedback.message}
         </div>
       )}
 
@@ -234,22 +235,25 @@ export default function AdminExchangesPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-center gap-2">
+                      {/* API Import (Finnhub/EODHD) */}
                       <button
                         onClick={() => handleImportIndex(idx.id)}
-                        disabled={importingIndex === idx.id || fillingIndex === idx.id}
+                        disabled={importingIndex === idx.id || aiImportingIndex === idx.id}
                         className="p-1.5 rounded bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 transition-colors disabled:opacity-50"
-                        title="Importeer via EODHD (vereist Extended plan)"
+                        title="Import via API (Finnhub voor US / EODHD fallback)"
                       >
                         <Download size={14} className={importingIndex === idx.id ? 'animate-bounce' : ''} />
                       </button>
+                      {/* AI Import (Claude) */}
                       <button
-                        onClick={() => handleFillFromExchange(idx.id)}
-                        disabled={fillingIndex === idx.id || importingIndex === idx.id}
+                        onClick={() => handleAiImportIndex(idx.id)}
+                        disabled={aiImportingIndex === idx.id || importingIndex === idx.id}
                         className="p-1.5 rounded bg-purple-500/15 text-purple-400 hover:bg-purple-500/25 transition-colors disabled:opacity-50"
-                        title={`Vul met alle symbolen van beurs '${idx.exchangeCode}'`}
+                        title="Import via Claude AI (werkt voor alle indexen)"
                       >
-                        <Database size={14} className={fillingIndex === idx.id ? 'animate-pulse' : ''} />
+                        <Sparkles size={14} className={aiImportingIndex === idx.id ? 'animate-pulse' : ''} />
                       </button>
+                      {/* Delete */}
                       <button
                         onClick={() => { if (window.confirm(`Index ${idx.displayName} verwijderen?`)) deleteIndexMutation.mutate(idx.id); }}
                         className="p-1.5 rounded text-gray-600 hover:text-red-400 transition-colors"

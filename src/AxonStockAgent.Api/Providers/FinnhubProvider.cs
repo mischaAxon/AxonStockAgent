@@ -450,4 +450,39 @@ public class FinnhubProvider : IMarketDataProvider, INewsProvider, IFundamentals
             return Array.Empty<AxonStockAgent.Api.Services.SymbolSearchResult>();
         }
     }
+
+    /// <summary>
+    /// Haal index-componenten op via Finnhub gratis API.
+    /// Ondersteunt: ^GSPC (S&P 500), ^NDX (NASDAQ-100), ^DJI (Dow Jones 30) en meer.
+    /// Retourneert een array van ticker symbols (bijv. ["AAPL", "MSFT", ...]).
+    /// </summary>
+    public async Task<string[]> GetIndexConstituents(string finnhubSymbol)
+    {
+        await RateLimit();
+        var url = $"{BaseUrl}/index/constituents?symbol={Uri.EscapeDataString(finnhubSymbol)}&token={_apiKey}";
+        try
+        {
+            var json = await _http.GetStringAsync(url);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            if (!root.TryGetProperty("constituents", out var constituents))
+                return Array.Empty<string>();
+
+            return constituents.EnumerateArray()
+                .Select(c => c.GetString() ?? "")
+                .Where(s => !string.IsNullOrEmpty(s))
+                .ToArray();
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
+        {
+            _logger.LogDebug("Finnhub: index constituents voor {Symbol} niet beschikbaar (403)", finnhubSymbol);
+            return Array.Empty<string>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("Finnhub GetIndexConstituents mislukt voor {Symbol}: {Message}", finnhubSymbol, ex.Message);
+            return Array.Empty<string>();
+        }
+    }
 }

@@ -288,16 +288,26 @@ public class AdminController : ControllerBase
         return Ok(new { message = $"Index '{index.DisplayName}' verwijderd" });
     }
 
+    /// <summary>Import via data-API (Finnhub voor US, EODHD fallback)</summary>
     [HttpPost("indices/{id:int}/import")]
-    public async Task<IActionResult> ImportIndexComponents(int id, [FromServices] IndexImportService importService)
+    public async Task<IActionResult> ImportIndexViaApi(int id, [FromServices] IndexImportService importService)
     {
         var index = await _db.MarketIndices.FindAsync(id);
         if (index == null) return NotFound();
 
-        var count = await importService.ImportIndexComponents(id);
-        if (count == 0)
-            return Ok(new { data = new { index = index.DisplayName, importedCount = 0, warning = "EODHD fundamentals API niet beschikbaar voor dit abonnement. Gebruik 'Vul van beurs' als alternatief." } });
-        return Ok(new { data = new { index = index.DisplayName, importedCount = count } });
+        var (count, source) = await importService.ImportViaApi(id);
+        return Ok(new { data = new { index = index.DisplayName, importedCount = count, source } });
+    }
+
+    /// <summary>Import via Claude AI (werkt voor alle indexen)</summary>
+    [HttpPost("indices/{id:int}/import-ai")]
+    public async Task<IActionResult> ImportIndexViaClaude(int id, [FromServices] IndexImportService importService)
+    {
+        var index = await _db.MarketIndices.FindAsync(id);
+        if (index == null) return NotFound();
+
+        var (count, source) = await importService.ImportViaClaude(id);
+        return Ok(new { data = new { index = index.DisplayName, importedCount = count, source } });
     }
 
     /// <summary>

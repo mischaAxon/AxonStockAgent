@@ -76,6 +76,7 @@ builder.Services.AddHostedService<OutcomeTrackerService>();
 builder.Services.AddScoped<QuoteCacheService>();
 builder.Services.AddScoped<ExchangeImportService>();
 builder.Services.AddScoped<IndexImportService>();
+builder.Services.AddScoped<ClaudeIndexService>();
 
 var app = builder.Build();
 
