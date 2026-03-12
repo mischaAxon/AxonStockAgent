@@ -9,9 +9,9 @@
 
 ## Wat is er gedaan in sessie 9
 
-Focus: **Markets Redesign — trader-style hoofdpagina, exchange/index import, Claude AI index-vulling**
+Focus: **Markets Redesign — trader-style hoofdpagina, exchange/index import, Claude AI als provider**
 
-Zeven prompts uitgevoerd (15 t/m 21), gericht op het volledig herstructureren van de app rond een centraal Markets-scherm.
+Acht prompts geschreven (15 t/m 22), zeven uitgevoerd. Volledig herstructurering van de app rond een centraal Markets-scherm.
 
 ### 1. Info Tooltips (Prompt 15) — geschreven, nog niet uitgevoerd
 
@@ -65,11 +65,11 @@ Zeven prompts uitgevoerd (15 t/m 21), gericht op het volledig herstructureren va
 - Markets-pagina: kolommen per index, "Overig" fallback voor niet-geïndexeerde symbolen
 - Nieuw endpoint: `GET /v1/exchanges/indices-with-symbols`
 
-### 6. Index Fallback (Prompt 20) — geschreven
+### 6. Index Fallback (Prompt 20) — vervangen door 21
 
 **Probleem:** EODHD fundamentals API vereist hoger abonnement (Forbidden).
 
-**Status:** Prompt geschreven (`docs/prompts/20-index-fallback-from-exchange.md`). Vervangen door prompt 21.
+**Status:** Prompt geschreven maar vervangen door prompt 21 (betere aanpak).
 
 ### 7. Finnhub + Claude AI Index Import (Prompt 21) ✅
 
@@ -82,6 +82,18 @@ Zeven prompts uitgevoerd (15 t/m 21), gericht op het volledig herstructureren va
 - Twee admin endpoints: `POST indices/{id}/import` + `POST indices/{id}/import-ai`
 - Admin UI: twee knoppen per index — ⬇ API (blauw) + ✨ AI (paars)
 
+### 8. Claude API als Provider (Prompt 22) ✅
+
+**Probleem:** Claude API key werd op 3 plekken anders gelezen (env vars, IConfiguration, ScreenerConfig). Niet beheersbaar via admin.
+
+**Oplossing:**
+- Claude wordt een **echte provider** in de `data_providers` tabel
+- `ClaudeApiKeyProvider` — centrale service die key leest uit DB met fallback naar env vars
+- Claude provider record wordt automatisch aangemaakt bij startup (API + Worker)
+- `ClaudeIndexService` en `ScreenerWorker` gebruiken nu `ClaudeApiKeyProvider`
+- Admin test endpoint voor Claude — stuurt minimale ping naar de API
+- Admin → Providers → Claude AI (Anthropic) → API key invullen → Enable → Test
+
 ---
 
 ## Gewijzigde bestanden (sessie 9)
@@ -90,7 +102,7 @@ Zeven prompts uitgevoerd (15 t/m 21), gericht op het volledig herstructureren va
 |---------|-------|--------|
 | `src/.../Controllers/SignalsController.cs` | **Gewijzigd** — uitgebreide `latest-per-symbol` | 16 |
 | `src/.../Controllers/ExchangesController.cs` | **Herschreven** — leest uit MarketSymbols + indices-with-symbols | 17, 19 |
-| `src/.../Controllers/AdminController.cs` | **Gewijzigd** — exchange + index endpoints | 17, 19, 21 |
+| `src/.../Controllers/AdminController.cs` | **Gewijzigd** — exchange + index + Claude test endpoints | 17, 19, 21, 22 |
 | `src/.../Data/Entities/MarketSymbolEntity.cs` | **Nieuw** | 17 |
 | `src/.../Data/Entities/TrackedExchangeEntity.cs` | **Nieuw** | 17 |
 | `src/.../Data/Entities/MarketIndexEntity.cs` | **Nieuw** | 19 |
@@ -100,8 +112,11 @@ Zeven prompts uitgevoerd (15 t/m 21), gericht op het volledig herstructureren va
 | `src/.../Providers/FinnhubProvider.cs` | **Gewijzigd** — GetIndexConstituents | 21 |
 | `src/.../Services/ExchangeImportService.cs` | **Nieuw** | 17 |
 | `src/.../Services/IndexImportService.cs` | **Nieuw** → **Herschreven** | 19, 21 |
-| `src/.../Services/ClaudeIndexService.cs` | **Nieuw** | 21 |
-| `src/.../Program.cs` | **Gewijzigd** — DI registraties | 17, 19, 21 |
+| `src/.../Services/ClaudeIndexService.cs` | **Nieuw** → **Gewijzigd** | 21, 22 |
+| `src/.../Services/ClaudeApiKeyProvider.cs` | **Nieuw** | 22 |
+| `src/.../Program.cs` (API) | **Gewijzigd** — DI + Claude provider seed | 17, 19, 21, 22 |
+| `src/AxonStockAgent.Worker/Program.cs` | **Gewijzigd** — DI + Claude provider seed | 22 |
+| `src/AxonStockAgent.Worker/ScreenerWorker.cs` | **Gewijzigd** — ClaudeApiKeyProvider | 22 |
 | `frontend/src/App.tsx` | **Gewijzigd** — routes opgeschoond | 16, 19 |
 | `frontend/src/components/layout/Layout.tsx` | **Gewijzigd** — nav opgeschoond | 16, 19 |
 | `frontend/src/pages/MarketsPage.tsx` | **Herschreven** (3x) — cards → trader grid → index-kolommen | 16, 18, 19 |
@@ -119,11 +134,19 @@ Zeven prompts uitgevoerd (15 t/m 21), gericht op het volledig herstructureren va
 
 ## Architectuur na sessie 9
 
+### Providers (data_providers tabel)
+
+| Provider | Type | Gratis | Gebruik |
+|----------|------|--------|---------|
+| **finnhub** | market_data + news + fundamentals | Ja (60 calls/min) | Candles, quotes, index constituents (US), profiel |
+| **eodhd** | market_data + news + fundamentals | Nee ($19.99/mnd) | EOD candles, quotes, exchange listings, fundamentals |
+| **claude** | ai | Nee (pay per use) | Signal analysis, index component lookup |
+
 ### Nieuwe API endpoints
 
 | Endpoint | Method | Beschrijving |
 |----------|--------|-------------|
-| `/api/v1/exchanges/all-symbols` | GET | Alle actieve symbolen uit MarketSymbols (was Watchlist) |
+| `/api/v1/exchanges/all-symbols` | GET | Alle actieve symbolen uit MarketSymbols |
 | `/api/v1/exchanges/indices-with-symbols` | GET | Alle indexen met hun componenten-symbolen |
 | `/api/v1/admin/exchanges` | GET/POST | CRUD tracked exchanges |
 | `/api/v1/admin/exchanges/{id}` | PUT/DELETE | Update/verwijder exchange |
@@ -142,9 +165,9 @@ Zeven prompts uitgevoerd (15 t/m 21), gericht op het volledig herstructureren va
 | `/sectors` | Sectoren | Sector overzicht |
 | `/news` | Nieuws | Nieuwsartikelen + sentiment |
 | `/stock/:symbol` | Stock Detail | Detail + live prijs + fundamentals + signalen |
-| `/admin/exchanges` | Admin Beurzen | Exchange + index beheer |
+| `/admin/exchanges` | Admin Beurzen | Exchange + index beheer + AI import |
 | `/admin/users` | Admin Gebruikers | User management |
-| `/admin/providers` | Admin Providers | Provider configuratie |
+| `/admin/providers` | Admin Providers | Provider configuratie (incl. Claude) |
 | `/admin/settings` | Admin Instellingen | Algo settings |
 
 ### Data flow: Markets scherm
@@ -152,7 +175,7 @@ Zeven prompts uitgevoerd (15 t/m 21), gericht op het volledig herstructureren va
 ```
 MarketsPage
   ├─ useIndicesWithSymbols()     → GET /exchanges/indices-with-symbols
-  ├─ useAllSymbols()             → GET /exchanges/all-symbols (fallback voor niet-geïndexeerde)
+  ├─ useAllSymbols()             → GET /exchanges/all-symbols (fallback)
   ├─ useBatchQuotes(symbols)     → GET /quotes/batch (30s poll)
   ├─ useLatestSignalsPerSymbol   → GET /signals/latest-per-symbol (60s poll)
   └─ Per index: ExchangeColumn → Tile grid (compacte tegels)
@@ -166,8 +189,18 @@ Admin → Beurzen → Indexen
   │   ├─ US (S&P/NDX/DJI): Finnhub GET /index/constituents (gratis)
   │   └─ Overig: EODHD GET /fundamentals/{INDEX}.INDX (betaald)
   ├─ ✨ AI Import
-  │   └─ Claude API → prompt → JSON array met componenten
+  │   └─ ClaudeApiKeyProvider → Claude API → JSON array met componenten
   └─ Resultaat → index_memberships + market_symbols tabellen
+```
+
+### Claude API key flow
+
+```
+ClaudeApiKeyProvider.GetApiKeyAsync()
+  1. data_providers tabel (naam = "claude", enabled, key ingevuld)
+  2. IConfiguration["Claude:ApiKey"]
+  3. IConfiguration["ANTHROPIC_API_KEY"]
+  4. Environment.GetEnvironmentVariable("ANTHROPIC_API_KEY")
 ```
 
 ---
