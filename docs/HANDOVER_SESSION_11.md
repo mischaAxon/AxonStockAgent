@@ -9,9 +9,9 @@
 
 ## Wat is er gedaan in sessie 11
 
-Focus: **Data pipeline werkend krijgen — diagnostiek, index-correctie, worker scan, fundamentals, cleanup**
+Focus: **Data pipeline volledig werkend krijgen — diagnostiek, index-correctie, worker scan, fundamentals, cleanup, nieuws**
 
-Vijf prompts geschreven en uitgevoerd (27 t/m 31). Het Markets scherm ging van ~5% data coverage naar 100%.
+Zes prompts geschreven en uitgevoerd (27 t/m 32). Het Markets scherm ging van ~5% data coverage naar 100%. De nieuwspipeline ging van 7 naar 69 symbolen.
 
 ### 1. Data Diagnostics + NL Index Herindeling (Prompt 27) ✅
 
@@ -47,21 +47,31 @@ Vijf prompts geschreven en uitgevoerd (27 t/m 31). Het Markets scherm ging van ~
 **Probleem:** 24 orphan symbolen in "Overig AS" kolom, bijna allemaal zonder data.
 
 **Oplossing:**
-- `GET /admin/symbols/orphans` — identificeer orphans
-- `POST /admin/symbols/cleanup-orphans` — deactiveer ze
-- `GET /diagnostics/quote-failures` — test welke index-symbolen falen
-- 24 orphans + 3 niet-ondersteunde symbolen (CTP, FAGR, WDP) gedeactiveerd
+- `GET /admin/symbols/orphans` + `POST /admin/symbols/cleanup-orphans`
+- `GET /diagnostics/quote-failures`
+- 24 orphans + 3 niet-ondersteunde symbolen gedeactiveerd
 
 ### 5. Fix Laatste Missende Quotes (Prompt 31) ✅
 
 **Probleem:** 5 index-symbolen zonder koers (AD, ADYEN, APAM, VASTN, TKWY).
 
 **Oplossing:**
-- `GET /diagnostics/quote-diagnose/{symbol}` — gedetailleerde diagnose per symbool
-- QuoteCacheService: SemaphoreSlim max 5 concurrent EODHD calls (was onbeperkt → rate limit)
-- EOD fallback quotes: 15 min cache ipv 30 sec
+- `GET /diagnostics/quote-diagnose/{symbol}` — gedetailleerde diagnose
+- QuoteCacheService: SemaphoreSlim max 5 concurrent EODHD calls
+- EOD fallback quotes: 15 min cache
 - AD/ADYEN/APAM: opgelost door rate limit fix
 - VASTN/TKWY: geen EODHD data, gedeactiveerd
+
+### 6. Nieuws Pipeline Fix (Prompt 32) ✅
+
+**Probleem:** NewsService las Watchlist (bijna leeg), werd niet periodiek aangeroepen. Sectorfilter toonde alleen "Technology".
+
+**Oplossing:**
+- NewsService leest nu MarketSymbols (69 symbolen) met 500ms rate limit
+- Geen dubbele sentiment calls meer (EODHD geeft sentiment mee in news response)
+- Worker roept `FetchLatestNews()` + `CalculateSectorSentiment()` aan na elke scan cycle
+- `POST /admin/news/fetch` + `GET /admin/news/status` endpoints
+- Van 7 naar 69 symbolen met nieuws, van 1 naar 9 sectoren
 
 ---
 
@@ -76,6 +86,8 @@ Vijf prompts geschreven en uitgevoerd (27 t/m 31). Het Markets scherm ging van ~
 | Signalen | 0-1 | Worden gegenereerd per scan |
 | Fundamentals | 0 | Bulk refresh beschikbaar |
 | Pillar scores | Nooit gevuld | Gevuld bij elke scan |
+| Nieuws symbolen | 7 | 69 |
+| Nieuws sectoren | 1 (Technology) | 9 sectoren |
 | Scan trigger | Niet mogelijk | Via admin endpoint |
 
 ---
@@ -86,19 +98,21 @@ Vijf prompts geschreven en uitgevoerd (27 t/m 31). Het Markets scherm ging van ~
 |---------|-------|--------|
 | `src/.../Controllers/DiagnosticsController.cs` | **Herschreven** — 6 endpoints | 27, 31 |
 | `src/.../Services/DutchIndexData.cs` | **Nieuw** | 27 |
-| `src/.../Controllers/AdminController.cs` | **Uitgebreid** — 6 nieuwe endpoints | 27, 28, 29, 30 |
+| `src/.../Controllers/AdminController.cs` | **Uitgebreid** — 8 nieuwe endpoints | 27, 28, 29, 30, 32 |
 | `src/.../Providers/EodhdProvider.cs` | **Gewijzigd** — EOD fallback, betere logging | 27 |
 | `src/.../Services/QuoteCacheService.cs` | **Gewijzigd** — semaphore, EOD cache | 27, 31 |
 | `src/.../Entities/ScanTriggerEntity.cs` | **Nieuw** | 28 |
 | `src/.../Data/AppDbContext.cs` | **Gewijzigd** — ScanTriggers DbSet | 28 |
-| `src/.../Worker/ScreenerWorker.cs` | **Gewijzigd** — MarketSymbols scan, pillars, trigger, fund refresh | 28, 29 |
+| `src/.../Worker/ScreenerWorker.cs` | **Gewijzigd** — MarketSymbols, pillars, trigger, fund refresh, news | 28, 29, 32 |
+| `src/.../Worker/Program.cs` | **Gewijzigd** — NewsService DI | 32 |
 | `src/.../Services/AlgoSettingsService.cs` | **Gewijzigd** — GetStringAsync, scan_source | 28 |
 | `src/.../Services/FundamentalsService.cs` | **Gewijzigd** — RefreshAllMarketSymbolsFundamentals | 29 |
+| `src/.../Services/NewsService.cs` | **Gewijzigd** — MarketSymbols, rate limiting, geen dubbele sentiment | 32 |
 | DB migraties | scan_triggers tabel, scan_source setting | 28 |
 
 ---
 
-## API endpoints (nieuw in sessie 11)
+## Alle API endpoints (nieuw in sessie 11)
 
 | Endpoint | Method | Beschrijving |
 |----------|--------|--------------|
@@ -114,20 +128,22 @@ Vijf prompts geschreven en uitgevoerd (27 t/m 31). Het Markets scherm ging van ~
 | `/admin/fundamentals/status` | GET | Fundamentals coverage stats |
 | `/admin/symbols/orphans` | GET | Toon orphan symbolen |
 | `/admin/symbols/cleanup-orphans` | POST | Deactiveer orphans |
+| `/admin/news/fetch` | POST | Trigger nieuws ophalen |
+| `/admin/news/status` | GET | Nieuws database status |
 
 ---
 
 ## Volgende stappen (sessie 12)
 
-### Prioriteit 1: UX Polish
-1. Sorteer-opties op Markets (change%, score, sentiment, marktcap)
-2. Meer visuele feedback — verdict dots en pillar dots verifiëren na scan
-3. Sector-filter op Markets
+### Prioriteit 1: Validatie & Verificatie
+1. Scan triggeren en verifiëren dat signalen correct op Markets verschijnen (verdict dots, pillar dots, scores)
+2. Fundamentals refresh triggeren en StockDetailPage Fundamentals tab valideren
+3. Nieuws-pagina valideren (sector filter, trending, sentiment heatmap)
 
-### Prioriteit 2: Validatie
-4. Scan triggeren en verifiëren dat signalen correct op het Markets scherm verschijnen
-5. Fundamentals refresh triggeren en StockDetailPage Fundamentals tab valideren
-6. Signal accuracy beginnen te evalueren
+### Prioriteit 2: UX Polish
+4. Sorteer-opties op Markets (change%, score, sentiment, marktcap)
+5. Sector-filter op Markets
+6. Markets tiles visueel verrijken
 
 ### Prioriteit 3: CI/CD + Deployment
 7. GitHub Actions workflow: build + test + Docker image push
