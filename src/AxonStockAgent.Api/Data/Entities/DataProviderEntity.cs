@@ -18,6 +18,12 @@ public class DataProviderEntity
 
     public string? ConfigJson { get; set; }
 
+    /// <summary>
+    /// Volgorde bij concurrent actieve providers van hetzelfde type.
+    /// Lagere waarde = hogere prioriteit. Standaard 100.
+    /// </summary>
+    public int Priority { get; set; } = 100;
+
     public int RateLimitPerMinute { get; set; } = 60;
 
     public bool SupportsEu { get; set; } = false;

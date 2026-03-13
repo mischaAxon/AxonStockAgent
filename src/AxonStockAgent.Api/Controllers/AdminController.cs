@@ -94,15 +94,15 @@ public class AdminController : ControllerBase
     public async Task<IActionResult> GetProviders()
     {
         var providers = await _db.DataProviders
-            .OrderBy(p => p.Name)
+            .OrderBy(p => p.Priority)
+            .ThenBy(p => p.Name)
             .Select(p => new
             {
                 p.Id, p.Name, p.DisplayName, p.ProviderType,
-                p.IsEnabled, p.RateLimitPerMinute,
+                p.IsEnabled, p.Priority, p.RateLimitPerMinute,
                 p.SupportsEu, p.SupportsUs, p.IsFree, p.MonthlyCost,
                 p.HealthStatus, p.LastHealthCheck, p.UpdatedAt,
                 hasApiKey = p.ApiKeyEncrypted != null
-                // ApiKeyEncrypted wordt nooit teruggestuurd
             })
             .ToListAsync();
 
@@ -116,6 +116,7 @@ public class AdminController : ControllerBase
         if (provider == null) return NotFound(new { error = $"Provider '{name}' niet gevonden" });
 
         if (request.IsEnabled.HasValue) provider.IsEnabled = request.IsEnabled.Value;
+        if (request.Priority.HasValue)  provider.Priority  = Math.Max(1, request.Priority.Value);
         if (request.ApiKey    != null)  provider.ApiKeyEncrypted = request.ApiKey; // TODO: encrypt
         if (request.ConfigJson != null) provider.ConfigJson = request.ConfigJson;
         provider.UpdatedAt = DateTime.UtcNow;
@@ -503,7 +504,7 @@ public class AdminController : ControllerBase
 }
 
 public record UpdateUserRequest(string? Role = null, bool? IsActive = null);
-public record UpdateProviderRequest(bool? IsEnabled = null, string? ApiKey = null, string? ConfigJson = null);
+public record UpdateProviderRequest(bool? IsEnabled = null, int? Priority = null, string? ApiKey = null, string? ConfigJson = null);
 public record UpdateSettingRequest(string Value);
 public record AddExchangeRequest(string ExchangeCode, string? DisplayName = null, string? Country = null);
 public record UpdateExchangeRequest(bool? IsEnabled = null, string? DisplayName = null);

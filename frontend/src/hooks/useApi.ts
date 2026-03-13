@@ -167,7 +167,7 @@ export function useProviders() {
 export function useUpdateProvider() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ name, ...data }: { name: string; isEnabled?: boolean; apiKey?: string; configJson?: string }) =>
+    mutationFn: ({ name, ...data }: { name: string; isEnabled?: boolean; priority?: number; apiKey?: string; configJson?: string }) =>
       api.put(`/v1/admin/providers/${name}`, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', 'providers'] }),
   });

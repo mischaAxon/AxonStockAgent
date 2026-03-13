@@ -42,7 +42,8 @@ public class ProviderManager
 
         var configs = await _db.DataProviders
             .Where(p => p.IsEnabled)
-            .OrderBy(p => p.Id)
+            .OrderBy(p => p.Priority)
+            .ThenBy(p => p.Id)
             .ToListAsync();
 
         foreach (var config in configs)
@@ -104,23 +105,19 @@ public class ProviderManager
 
     /// <summary>
     /// Geeft de beste market-data provider voor het opgegeven symbool.
-    /// Prioriteit: exchange-match → EODHD (betrouwbare candles) → eerste beschikbare.
+    /// Volgorde bepaald door Priority in de database (lager = eerder).
+    /// Exchange-match gaat voor prioriteit.
     /// </summary>
     public async Task<IMarketDataProvider?> GetMarketDataProvider(string? preferredExchange = null)
     {
         await EnsureLoaded();
 
-        // 1. Probeer exchange-specifieke match
         if (preferredExchange != null)
         {
             var match = _marketData!.FirstOrDefault(p =>
                 p.SupportedExchanges.Contains(preferredExchange, StringComparer.OrdinalIgnoreCase));
             if (match != null) return match;
         }
-
-        // 2. Geef voorkeur aan EODHD — Finnhub blokkeert /stock/candle op gratis tier
-        var eodhd = _marketData!.OfType<EodhdProvider>().FirstOrDefault();
-        if (eodhd != null) return eodhd;
 
         return _marketData!.FirstOrDefault();
     }
@@ -134,14 +131,12 @@ public class ProviderManager
 
     /// <summary>
     /// Retourneert de beste fundamentals provider.
-    /// Voorkeur: EODHD (brede EU-dekking) → eerste beschikbare.
-    /// Finnhub gratis tier blokkeert fundamentals endpoints (403).
+    /// Volgorde bepaald door Priority in de database (lager = eerder).
     /// </summary>
     public async Task<IFundamentalsProvider?> GetFundamentalsProvider()
     {
         await EnsureLoaded();
-        var eodhd = _fundamentals!.OfType<EodhdProvider>().FirstOrDefault();
-        return (IFundamentalsProvider?)eodhd ?? _fundamentals!.FirstOrDefault();
+        return _fundamentals!.FirstOrDefault();
     }
 
     /// <summary>Retourneert een specifieke provider op naam als die actief is.</summary>

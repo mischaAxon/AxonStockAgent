@@ -190,6 +190,11 @@ namespace AxonStockAgent.Api.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("Priority")
+                        .ValueGeneratedOnAdd()
+                        .HasDefaultValue(100)
+                        .HasColumnType("integer");
+
                     b.Property<int>("RateLimitPerMinute")
                         .HasColumnType("integer");
 

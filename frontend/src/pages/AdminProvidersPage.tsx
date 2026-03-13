@@ -86,6 +86,7 @@ interface Provider {
   displayName: string;
   providerType: string;
   isEnabled: boolean;
+  priority: number;
   rateLimitPerMinute: number;
   supportsEu: boolean;
   supportsUs: boolean;
@@ -129,6 +130,7 @@ interface TestResult {
 function ProviderCard({ provider }: { provider: Provider }) {
   const [apiKey,     setApiKey]     = useState('');
   const [showKey,    setShowKey]    = useState(false);
+  const [priority,   setPriority]   = useState(String(provider.priority ?? 100));
   const [testResult, setTestResult] = useState<TestResult | null>(null);
 
   const updateProvider = useUpdateProvider();
@@ -142,6 +144,12 @@ function ProviderCard({ provider }: { provider: Provider }) {
     if (!apiKey.trim()) return;
     updateProvider.mutate({ name: provider.name, apiKey: apiKey.trim() });
     setApiKey('');
+  }
+
+  function handleSavePriority() {
+    const val = parseInt(priority, 10);
+    if (isNaN(val) || val < 1) return;
+    updateProvider.mutate({ name: provider.name, priority: val });
   }
 
   async function handleTest() {
@@ -251,6 +259,33 @@ function ProviderCard({ provider }: { provider: Provider }) {
           >
             Opslaan
           </button>
+        </div>
+      </div>
+
+      {/* Prioriteit */}
+      <div>
+        <label className="block text-xs text-gray-500 mb-1.5">
+          Prioriteit
+          <span className="ml-1 text-gray-600">(lager = eerder gebruikt bij meerdere actieve providers)</span>
+        </label>
+        <div className="flex gap-2 items-center">
+          <input
+            type="number"
+            min={1}
+            max={999}
+            value={priority}
+            onChange={e => setPriority(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSavePriority()}
+            className="w-24 bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-axon-400 focus:ring-1 focus:ring-axon-400 transition-colors"
+          />
+          <button
+            onClick={handleSavePriority}
+            disabled={updateProvider.isPending}
+            className="px-3 py-2 bg-axon-600 hover:bg-axon-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs rounded-lg transition-colors"
+          >
+            Opslaan
+          </button>
+          <span className="text-xs text-gray-600">huidig: {provider.priority}</span>
         </div>
       </div>
 
