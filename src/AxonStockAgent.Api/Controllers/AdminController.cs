@@ -406,6 +406,94 @@ public class AdminController : ControllerBase
 
         return Ok(new { data = new { index = index.DisplayName, importedCount = symbols.Count } });
     }
+
+    /// <summary>
+    /// Herlaad AEX, AMX en AMS Next 20 met correcte hardcoded data (Euronext, maart 2026).
+    /// Vervangt de onnauwkeurige Claude AI-geïmporteerde data.
+    /// </summary>
+    [HttpPost("indices/reload-nl")]
+    public async Task<IActionResult> ReloadDutchIndices()
+    {
+        var results = new List<object>();
+        var now = DateTime.UtcNow;
+
+        var indexMappings = new[]
+        {
+            new { Symbol = "AEX.INDX",   DisplayName = "AEX",           Components = DutchIndexData.AEX },
+            new { Symbol = "AMX.INDX",   DisplayName = "AMX Midcap",    Components = DutchIndexData.AMX },
+            new { Symbol = "ASCX.INDX",  DisplayName = "AMS Next 20",   Components = DutchIndexData.AmsNext20 },
+        };
+
+        foreach (var mapping in indexMappings)
+        {
+            // Zoek de index op symbol of op eerste woord van displaynaam (case-insensitive)
+            var firstWord = mapping.DisplayName.Split(' ')[0].ToLower();
+            var index = await _db.MarketIndices.FirstOrDefaultAsync(i =>
+                i.IndexSymbol == mapping.Symbol ||
+                i.DisplayName.ToLower().Contains(firstWord));
+
+            if (index == null)
+            {
+                index = new MarketIndexEntity
+                {
+                    IndexSymbol  = mapping.Symbol,
+                    DisplayName  = mapping.DisplayName,
+                    ExchangeCode = "AS",
+                    Country      = "NL",
+                    IsEnabled    = true,
+                };
+                _db.MarketIndices.Add(index);
+                await _db.SaveChangesAsync(); // nodig voor Id
+            }
+
+            // Verwijder bestaande memberships
+            var existing = await _db.IndexMemberships
+                .Where(m => m.MarketIndexId == index.Id)
+                .ToListAsync();
+            _db.IndexMemberships.RemoveRange(existing);
+
+            // Voeg correcte componenten toe
+            foreach (var comp in mapping.Components)
+            {
+                var fullSymbol = $"{comp.Ticker}.AS";
+
+                _db.IndexMemberships.Add(new IndexMembershipEntity
+                {
+                    MarketIndexId = index.Id,
+                    Symbol        = fullSymbol,
+                    Name          = comp.Name,
+                    Sector        = comp.Sector,
+                    AddedAt       = now,
+                });
+
+                // Zorg dat het symbool ook in MarketSymbols staat
+                var alreadyExists = await _db.MarketSymbols.AnyAsync(m => m.Symbol == fullSymbol);
+                if (!alreadyExists)
+                {
+                    _db.MarketSymbols.Add(new MarketSymbolEntity
+                    {
+                        Symbol     = fullSymbol,
+                        Exchange   = "AS",
+                        Name       = comp.Name,
+                        Sector     = comp.Sector,
+                        Country    = "NL",
+                        IsActive   = true,
+                        ImportedAt = now,
+                        UpdatedAt  = now,
+                    });
+                }
+            }
+
+            index.SymbolCount  = mapping.Components.Length;
+            index.LastImportAt = now;
+            index.DisplayName  = mapping.DisplayName;
+
+            results.Add(new { index = mapping.DisplayName, count = mapping.Components.Length });
+        }
+
+        await _db.SaveChangesAsync();
+        return Ok(new { data = results, message = "NL-indexen succesvol herladen met correcte data" });
+    }
 }
 
 public record UpdateUserRequest(string? Role = null, bool? IsActive = null);
