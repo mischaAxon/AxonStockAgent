@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, RefreshCw, ExternalLink } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { useFundamentals, useInsiderTransactions, useWatchlist, useSignals, useNewsBySymbol, useBatchQuotes } from '../hooks/useApi';
-import type { CompanyFundamentals, InsiderTransaction, Signal, NewsArticle } from '../types';
+import type { CompanyFundamentals, InsiderTransaction, Signal, NewsArticle, WatchlistItem } from '../types';
 import { relativeTime } from '../utils/formatTime';
 import { VerdictBadge, ScoreBar, InfoTooltip } from '../components/shared';
 import PillarScoreBar from '../components/PillarScoreBar';
@@ -230,11 +230,142 @@ function InsiderTable({ transactions }: { transactions: InsiderTransaction[] }) 
   );
 }
 
+function NewsTab({ news }: { news: NewsArticle[] }) {
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? news : news.slice(0, 10);
+
+  if (news.length === 0) {
+    return (
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-center">
+        <p className="text-gray-500 text-sm">Geen recent nieuws beschikbaar.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl divide-y divide-gray-800">
+      {visible.map((article) => {
+        const sentDot = article.sentimentScore > 0.1
+          ? 'bg-green-400'
+          : article.sentimentScore < -0.1
+            ? 'bg-red-400'
+            : 'bg-gray-500';
+
+        return (
+          <div key={article.id} className="px-4 py-3 flex items-start gap-3">
+            <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${sentDot}`} />
+            <div className="min-w-0 flex-1">
+              {article.url ? (
+                <a
+                  href={article.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-white hover:text-axon-300 transition-colors line-clamp-2"
+                >
+                  {article.headline}
+                </a>
+              ) : (
+                <p className="text-sm text-white line-clamp-2">{article.headline}</p>
+              )}
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-xs text-gray-500">{article.source}</span>
+                <span className="text-gray-700">·</span>
+                <span className="text-xs text-gray-500">{relativeTime(article.publishedAt)}</span>
+                <span className="text-gray-700">·</span>
+                <span className={`text-xs font-mono ${
+                  article.sentimentScore > 0.1 ? 'text-green-400'
+                    : article.sentimentScore < -0.1 ? 'text-red-400'
+                    : 'text-gray-500'
+                }`}>
+                  {article.sentimentScore > 0 ? '+' : ''}{(article.sentimentScore * 100).toFixed(0)}%
+                </span>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+      {news.length > 10 && !showAll && (
+        <button
+          onClick={() => setShowAll(true)}
+          className="w-full px-4 py-3 text-xs text-axon-400 hover:text-axon-300 hover:bg-gray-800/30 transition-colors"
+        >
+          Toon alle {news.length} artikelen →
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ProfileTab({ watchlistItem, fund }: { watchlistItem: WatchlistItem | undefined; fund: CompanyFundamentals | undefined }) {
+  return (
+    <div className="space-y-6">
+      <section>
+        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Bedrijfsinformatie</h2>
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Sector</p>
+              <p className="text-sm text-white">{watchlistItem?.sector ?? '—'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Industrie</p>
+              <p className="text-sm text-white">{watchlistItem?.industry ?? '—'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Land</p>
+              <p className="text-sm text-white">
+                {watchlistItem?.country ? `${countryFlag(watchlistItem.country)} ${watchlistItem.country}` : '—'}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Beurs</p>
+              <p className="text-sm text-white">{watchlistItem?.exchange ?? '—'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 mb-1">Marktkapitalisatie</p>
+              <p className="text-sm text-white">
+                {fund?.marketCap != null ? '$' + fmtLarge(fund.marketCap) : watchlistItem?.marketCap != null ? '$' + fmtLarge(watchlistItem.marketCap) : '—'}
+              </p>
+            </div>
+            {watchlistItem?.webUrl && (
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Website</p>
+                <a
+                  href={watchlistItem.webUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-axon-400 hover:text-axon-300 transition-colors"
+                >
+                  {new URL(watchlistItem.webUrl).hostname}
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">AI Analyse</h2>
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-center">
+          <p className="text-gray-500 text-sm">AI-gegenereerde bedrijfssamenvatting komt in een toekomstige update.</p>
+          <p className="text-xs text-gray-600 mt-1">
+            Denk aan: business overview, seizoenaliteit, concurrentiepositie, en risicofactoren — vergelijkbaar met EdgeHound's "General" sectie.
+          </p>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 // ─── main page ───────────────────────────────────────────────────────────────
+
+const tabs = ['Signalen', 'Nieuws', 'Fundamentals', 'Profiel'] as const;
+type Tab = typeof tabs[number];
 
 export default function StockDetailPage() {
   const { symbol = '' } = useParams<{ symbol: string }>();
   const upperSymbol = symbol.toUpperCase();
+  const [activeTab, setActiveTab] = useState<Tab>('Signalen');
 
   const { data: watchlistData }   = useWatchlist();
   const { data: fundData, isLoading: fundLoading, error: fundError, refetch } = useFundamentals(upperSymbol);
@@ -256,7 +387,6 @@ export default function StockDetailPage() {
     ? signals.reduce((acc, s) => acc + s.finalScore, 0) / signals.length
     : null;
 
-  // Chart data: oldest first
   const chartData = [...signals]
     .reverse()
     .map(s => ({
@@ -380,323 +510,311 @@ export default function StockDetailPage() {
         </div>
       )}
 
-      {/* ── Quick Stats Banner ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        {/* Latest signal */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <p className="text-xs text-gray-500 mb-1.5 flex items-center">Laatste Signaal<InfoTooltip text={TOOLTIPS.verdict} /></p>
-          {signalsLoading ? (
-            <div className="h-5 bg-gray-800 rounded animate-pulse w-16" />
-          ) : latestSignal ? (
-            <div>
-              <VerdictBadge verdict={latestSignal.finalVerdict} />
-              <p className="text-xs text-gray-500 mt-1">{relativeTime(latestSignal.createdAt)}</p>
-            </div>
-          ) : (
-            <p className="text-gray-600 text-sm">Geen signalen</p>
-          )}
-        </div>
-
-        {/* Score */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <p className="text-xs text-gray-500 mb-1.5 flex items-center">Score<InfoTooltip text={TOOLTIPS.finalScore} /></p>
-          {signalsLoading ? (
-            <div className="h-5 bg-gray-800 rounded animate-pulse w-12" />
-          ) : latestSignal ? (
-            <p className={`text-xl font-bold font-mono ${
-              latestSignal.finalScore >= 0.6 ? 'text-green-400'
-              : latestSignal.finalScore >= 0.3 ? 'text-amber-400'
-              : 'text-red-400'
-            }`}>
-              {(latestSignal.finalScore * 100).toFixed(1)}%
-            </p>
-          ) : (
-            <p className="text-gray-600 text-xl font-bold">—</p>
-          )}
-        </div>
-
-        {/* Total signals */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <p className="text-xs text-gray-500 mb-1.5 flex items-center">Totaal Signalen<InfoTooltip text={TOOLTIPS.totalSignals} /></p>
-          {signalsLoading ? (
-            <div className="h-5 bg-gray-800 rounded animate-pulse w-8" />
-          ) : (
-            <p className="text-xl font-bold text-white">{totalSignals}</p>
-          )}
-        </div>
-
-        {/* Average score */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <p className="text-xs text-gray-500 mb-1.5 flex items-center">Gemiddelde Score<InfoTooltip text={TOOLTIPS.avgScore} /></p>
-          {signalsLoading ? (
-            <div className="h-5 bg-gray-800 rounded animate-pulse w-12" />
-          ) : avgScore != null ? (
-            <p className={`text-xl font-bold font-mono ${
-              avgScore >= 0.6 ? 'text-green-400' : avgScore >= 0.3 ? 'text-amber-400' : 'text-red-400'
-            }`}>
-              {(avgScore * 100).toFixed(1)}%
-            </p>
-          ) : (
-            <p className="text-gray-600 text-xl font-bold">—</p>
-          )}
-        </div>
-
-        {/* Pillar breakdown */}
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          <p className="text-xs text-gray-500 mb-2 flex items-center">Score Breakdown<InfoTooltip text="Hoe elke pijler bijdraagt aan de totaalscore: Tech (technische indicatoren), Fund (fundamentals), Sent (sentiment), AI (Claude analyse)." /></p>
-          {signalsLoading ? (
-            <div className="h-16 bg-gray-800 rounded animate-pulse" />
-          ) : latestSignal ? (
-            <PillarScoreBar
-              techScore={latestSignal.techScore}
-              sentimentScore={latestSignal.sentimentScore}
-              claudeConfidence={latestSignal.claudeConfidence}
-              fundamentalsScore={latestSignal.fundamentalsScore}
-            />
-          ) : (
-            <p className="text-gray-600 text-sm">Geen data</p>
-          )}
-        </div>
+      {/* ── Tab Navigation ─────────────────────────────────────────────────── */}
+      <div className="flex gap-1 border-b border-gray-800">
+        {tabs.map(tab => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2.5 text-sm font-medium transition-colors relative ${
+              activeTab === tab
+                ? 'text-axon-400'
+                : 'text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            {tab}
+            {activeTab === tab && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-axon-500 rounded-full" />
+            )}
+          </button>
+        ))}
       </div>
 
-      {/* ── Score Trend Chart ──────────────────────────────────────────────── */}
-      <section>
-        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center">Score Trend<InfoTooltip text={TOOLTIPS.scoreTrend} /></h2>
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          {signalsLoading ? (
-            <div className="h-[200px] bg-gray-800 rounded animate-pulse" />
-          ) : chartData.length < 2 ? (
-            <p className="text-gray-500 text-sm py-8 text-center">
-              Niet genoeg data voor een trend chart.
-            </p>
-          ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
-                <XAxis
-                  dataKey="date"
-                  tick={{ fontSize: 10, fill: '#6b7280' }}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  domain={[0, 1]}
-                  tickFormatter={(v: number) => `${Math.round(v * 100)}%`}
-                  tick={{ fontSize: 10, fill: '#6b7280' }}
-                  axisLine={false}
-                  tickLine={false}
-                  width={36}
-                />
-                <Tooltip content={<ChartTooltip />} />
-                <ReferenceLine y={0.65} stroke="#22c55e" strokeDasharray="4 3" strokeOpacity={0.5} />
-                <ReferenceLine y={0.35} stroke="#ef4444" strokeDasharray="4 3" strokeOpacity={0.5} />
-                <Line
-                  type="monotone"
-                  dataKey="score"
-                  stroke="#3b82f6"
-                  strokeWidth={2}
-                  dot={<ChartDot />}
-                  activeDot={{ r: 5, fill: '#3b82f6' }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-      </section>
+      {/* ── Tab Content ────────────────────────────────────────────────────── */}
 
-      {/* ── Signaalhistorie ───────────────────────────────────────────────── */}
-      <section>
-        <div className="flex items-center gap-2 mb-3">
-          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Signaalhistorie</h2>
-          {totalSignals > 0 && (
-            <span className="px-2 py-0.5 rounded-full bg-gray-800 text-gray-400 text-xs">{totalSignals}</span>
-          )}
-        </div>
-
-        <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-          {signalsLoading ? (
-            <div className="p-4 animate-pulse space-y-2">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="h-8 bg-gray-800 rounded" />
-              ))}
-            </div>
-          ) : signals.length === 0 ? (
-            <p className="text-gray-500 text-sm p-4">Nog geen signalen voor {upperSymbol}.</p>
-          ) : (
-            <>
-              <table className="w-full text-sm">
-                <thead className="bg-gray-800/50">
-                  <tr>
-                    <th className="px-4 py-2.5 text-left text-xs text-gray-400 font-medium">Datum</th>
-                    <th className="px-4 py-2.5 text-left text-xs text-gray-400 font-medium">Verdict</th>
-                    <th className="px-4 py-2.5 text-left text-xs text-gray-400 font-medium w-36">Score</th>
-                    <th className="px-4 py-2.5 text-right text-xs text-gray-400 font-medium">Prijs</th>
-                    <th className="px-4 py-2.5 text-left text-xs text-gray-400 font-medium hidden md:table-cell">Claude</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-800">
-                  {signals.map((s) => (
-                    <tr key={s.id} className="hover:bg-gray-800/30">
-                      <td className="px-4 py-2.5 text-gray-400 whitespace-nowrap text-xs">{relativeTime(s.createdAt)}</td>
-                      <td className="px-4 py-2.5"><VerdictBadge verdict={s.finalVerdict} /></td>
-                      <td className="px-4 py-2.5"><ScoreBar score={s.finalScore} width="w-16" /></td>
-                      <td className="px-4 py-2.5 text-right font-mono text-white text-xs">€{s.priceAtSignal.toFixed(2)}</td>
-                      <td className="px-4 py-2.5 text-gray-500 text-xs hidden md:table-cell max-w-xs truncate">
-                        {s.claudeReasoning
-                          ? s.claudeReasoning.slice(0, 60) + (s.claudeReasoning.length > 60 ? '…' : '')
-                          : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-
-              {totalSignals > 10 && (
-                <div className="px-4 py-2.5 border-t border-gray-800">
-                  <Link
-                    to={`/signals?symbol=${upperSymbol}`}
-                    className="text-xs text-axon-400 hover:text-axon-300 transition-colors"
-                  >
-                    Bekijk alle signalen →
-                  </Link>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </section>
-
-      {/* ── Recent Nieuws ─────────────────────────────────────────────────── */}
-      <section>
-        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Recent Nieuws</h2>
-        <div className="bg-gray-900 border border-gray-800 rounded-xl divide-y divide-gray-800">
-          {news.length === 0 ? (
-            <p className="text-gray-500 text-sm p-4">Geen recent nieuws voor {upperSymbol}.</p>
-          ) : (
-            news.slice(0, 5).map((article) => {
-              const sentDot = article.sentimentScore > 0.1
-                ? 'bg-green-400'
-                : article.sentimentScore < -0.1
-                  ? 'bg-red-400'
-                  : 'bg-gray-500';
-
-              return (
-                <div key={article.id} className="px-4 py-3 flex items-start gap-3">
-                  <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${sentDot}`} />
-                  <div className="min-w-0">
-                    {article.url ? (
-                      <a
-                        href={article.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-white hover:text-axon-300 transition-colors line-clamp-2"
-                      >
-                        {article.headline}
-                      </a>
-                    ) : (
-                      <p className="text-sm text-white line-clamp-2">{article.headline}</p>
-                    )}
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs text-gray-500">{article.source}</span>
-                      <span className="text-gray-700">·</span>
-                      <span className="text-xs text-gray-500">{relativeTime(article.publishedAt)}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </section>
-
-      {/* ── Fundamentals ─────────────────────────────────────────────────── */}
-      {fundLoading ? (
-        <Skeleton />
-      ) : fundError || !fund ? (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-center">
-          <p className="text-gray-400">Geen fundamentals beschikbaar voor {upperSymbol}.</p>
-          <p className="text-xs text-gray-600 mt-1">Controleer of een fundamentals provider actief is.</p>
-        </div>
-      ) : (
+      {activeTab === 'Signalen' && (
         <div className="space-y-6">
-          {/* Valuation */}
-          <section>
-            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Waardering</h2>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              <MetricCard label="P/E Ratio"    value={fmt(fund.peRatio)}    color={peColor(fund.peRatio)}    tooltip={TOOLTIPS.peRatio} />
-              <MetricCard label="Forward P/E"  value={fmt(fund.forwardPe)}  color={peColor(fund.forwardPe)}  tooltip={TOOLTIPS.forwardPe} />
-              <MetricCard label="P/B Ratio"    value={fmt(fund.pbRatio)}    color={fund.pbRatio != null && fund.pbRatio < 3 ? 'text-green-400' : 'text-yellow-400'} tooltip={TOOLTIPS.pbRatio} />
-              <MetricCard label="P/S Ratio"    value={fmt(fund.psRatio)}    color={fund.psRatio != null && fund.psRatio < 2 ? 'text-green-400' : 'text-yellow-400'} tooltip={TOOLTIPS.psRatio} />
-              <MetricCard label="EV/EBITDA"    value={fmt(fund.evToEbitda)} color={fund.evToEbitda != null && fund.evToEbitda < 15 ? 'text-green-400' : 'text-yellow-400'} tooltip={TOOLTIPS.evToEbitda} />
-            </div>
-          </section>
-
-          {/* Profitability & Growth */}
-          <section>
-            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Winstgevendheid & Groei</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <MetricCard label="Nettomarge"         value={fmtPct(fund.profitMargin)}      color={pctColor(fund.profitMargin)}      tooltip={TOOLTIPS.profitMargin} />
-              <MetricCard label="Operationele marge" value={fmtPct(fund.operatingMargin)}   color={pctColor(fund.operatingMargin)}   tooltip={TOOLTIPS.operatingMargin} />
-              <MetricCard label="ROE"                value={fmtPct(fund.returnOnEquity)}    color={pctColor(fund.returnOnEquity)}    tooltip={TOOLTIPS.returnOnEquity} />
-              <MetricCard label="ROA"                value={fmtPct(fund.returnOnAssets)}    color={pctColor(fund.returnOnAssets)}    tooltip={TOOLTIPS.returnOnAssets} />
-              <MetricCard label="Omzetgroei (YoY)"   value={fmtPct(fund.revenueGrowthYoy)}  color={pctColor(fund.revenueGrowthYoy)}  tooltip={TOOLTIPS.revenueGrowthYoy} />
-              <MetricCard label="Winstgroei (YoY)"   value={fmtPct(fund.earningsGrowthYoy)} color={pctColor(fund.earningsGrowthYoy)} tooltip={TOOLTIPS.earningsGrowthYoy} />
-            </div>
-          </section>
-
-          {/* Balance sheet */}
-          <section>
-            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Balans</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <MetricCard label="Schuld/Eigen vermogen" value={fmt(fund.debtToEquity)} color={deColor(fund.debtToEquity)}     tooltip={TOOLTIPS.debtToEquity} />
-              <MetricCard label="Current Ratio"         value={fmt(fund.currentRatio)} color={ratioColor(fund.currentRatio)} tooltip={TOOLTIPS.currentRatio} />
-              <MetricCard label="Quick Ratio"           value={fmt(fund.quickRatio)}   color={ratioColor(fund.quickRatio)}   tooltip={TOOLTIPS.quickRatio} />
-            </div>
-          </section>
-
-          {/* Dividends */}
-          {(fund.dividendYield != null || fund.payoutRatio != null) && (
-            <section>
-              <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Dividend</h2>
-              <div className="grid grid-cols-2 gap-3 max-w-xs">
-                <MetricCard label="Dividendrendement" value={fmtPct(fund.dividendYield)} color="text-white"                    tooltip={TOOLTIPS.dividendYield} />
-                <MetricCard label="Uitkeringsratio"   value={fmtPct(fund.payoutRatio)}   color={payoutColor(fund.payoutRatio)} tooltip={TOOLTIPS.payoutRatio} />
-              </div>
-            </section>
-          )}
-
-          {/* Size */}
-          <section>
-            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Omvang</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <MetricCard label="Marktkapitalisatie" value={fmtLarge(fund.marketCap) !== '—' ? '$' + fmtLarge(fund.marketCap) : '—'} color="text-white"                tooltip={TOOLTIPS.marketCap} />
-              <MetricCard label="Omzet (TTM)"        value={fund.revenue   != null ? '$' + fmtLarge(fund.revenue)   : '—'} color="text-white"                tooltip={TOOLTIPS.revenue} />
-              <MetricCard label="Nettoresultaat"     value={fund.netIncome != null ? '$' + fmtLarge(fund.netIncome) : '—'} color={pctColor(fund.netIncome)} tooltip={TOOLTIPS.netIncome} />
-            </div>
-          </section>
-
-          {/* Analyst consensus */}
-          <section>
-            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center">Analisten consensus<InfoTooltip text={TOOLTIPS.analystConsensus} /></h2>
+          {/* Quick Stats Banner */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-              <AnalystBar data={fund} />
+              <p className="text-xs text-gray-500 mb-1.5 flex items-center">Laatste Signaal<InfoTooltip text={TOOLTIPS.verdict} /></p>
+              {signalsLoading ? (
+                <div className="h-5 bg-gray-800 rounded animate-pulse w-16" />
+              ) : latestSignal ? (
+                <div>
+                  <VerdictBadge verdict={latestSignal.finalVerdict} />
+                  <p className="text-xs text-gray-500 mt-1">{relativeTime(latestSignal.createdAt)}</p>
+                </div>
+              ) : (
+                <p className="text-gray-600 text-sm">Geen signalen</p>
+              )}
+            </div>
+
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <p className="text-xs text-gray-500 mb-1.5 flex items-center">Score<InfoTooltip text={TOOLTIPS.finalScore} /></p>
+              {signalsLoading ? (
+                <div className="h-5 bg-gray-800 rounded animate-pulse w-12" />
+              ) : latestSignal ? (
+                <p className={`text-xl font-bold font-mono ${
+                  latestSignal.finalScore >= 0.6 ? 'text-green-400'
+                  : latestSignal.finalScore >= 0.3 ? 'text-amber-400'
+                  : 'text-red-400'
+                }`}>
+                  {(latestSignal.finalScore * 100).toFixed(1)}%
+                </p>
+              ) : (
+                <p className="text-gray-600 text-xl font-bold">—</p>
+              )}
+            </div>
+
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <p className="text-xs text-gray-500 mb-1.5 flex items-center">Totaal Signalen<InfoTooltip text={TOOLTIPS.totalSignals} /></p>
+              {signalsLoading ? (
+                <div className="h-5 bg-gray-800 rounded animate-pulse w-8" />
+              ) : (
+                <p className="text-xl font-bold text-white">{totalSignals}</p>
+              )}
+            </div>
+
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <p className="text-xs text-gray-500 mb-1.5 flex items-center">Gemiddelde Score<InfoTooltip text={TOOLTIPS.avgScore} /></p>
+              {signalsLoading ? (
+                <div className="h-5 bg-gray-800 rounded animate-pulse w-12" />
+              ) : avgScore != null ? (
+                <p className={`text-xl font-bold font-mono ${
+                  avgScore >= 0.6 ? 'text-green-400' : avgScore >= 0.3 ? 'text-amber-400' : 'text-red-400'
+                }`}>
+                  {(avgScore * 100).toFixed(1)}%
+                </p>
+              ) : (
+                <p className="text-gray-600 text-xl font-bold">—</p>
+              )}
+            </div>
+
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <p className="text-xs text-gray-500 mb-2 flex items-center">Score Breakdown<InfoTooltip text="Hoe elke pijler bijdraagt aan de totaalscore: Tech (technische indicatoren), Fund (fundamentals), Sent (sentiment), AI (Claude analyse)." /></p>
+              {signalsLoading ? (
+                <div className="h-16 bg-gray-800 rounded animate-pulse" />
+              ) : latestSignal ? (
+                <PillarScoreBar
+                  techScore={latestSignal.techScore}
+                  sentimentScore={latestSignal.sentimentScore}
+                  claudeConfidence={latestSignal.claudeConfidence}
+                  fundamentalsScore={latestSignal.fundamentalsScore}
+                />
+              ) : (
+                <p className="text-gray-600 text-sm">Geen data</p>
+              )}
+            </div>
+          </div>
+
+          {/* Score Trend Chart */}
+          <section>
+            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center">Score Trend<InfoTooltip text={TOOLTIPS.scoreTrend} /></h2>
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              {signalsLoading ? (
+                <div className="h-[200px] bg-gray-800 rounded animate-pulse" />
+              ) : chartData.length < 2 ? (
+                <p className="text-gray-500 text-sm py-8 text-center">
+                  Niet genoeg data voor een trend chart.
+                </p>
+              ) : (
+                <ResponsiveContainer width="100%" height={200}>
+                  <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 10, fill: '#6b7280' }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <YAxis
+                      domain={[0, 1]}
+                      tickFormatter={(v: number) => `${Math.round(v * 100)}%`}
+                      tick={{ fontSize: 10, fill: '#6b7280' }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={36}
+                    />
+                    <Tooltip content={<ChartTooltip />} />
+                    <ReferenceLine y={0.65} stroke="#22c55e" strokeDasharray="4 3" strokeOpacity={0.5} />
+                    <ReferenceLine y={0.35} stroke="#ef4444" strokeDasharray="4 3" strokeOpacity={0.5} />
+                    <Line
+                      type="monotone"
+                      dataKey="score"
+                      stroke="#3b82f6"
+                      strokeWidth={2}
+                      dot={<ChartDot />}
+                      activeDot={{ r: 5, fill: '#3b82f6' }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </section>
+
+          {/* Signaalhistorie */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Signaalhistorie</h2>
+              {totalSignals > 0 && (
+                <span className="px-2 py-0.5 rounded-full bg-gray-800 text-gray-400 text-xs">{totalSignals}</span>
+              )}
+            </div>
+            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+              {signalsLoading ? (
+                <div className="p-4 animate-pulse space-y-2">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="h-8 bg-gray-800 rounded" />
+                  ))}
+                </div>
+              ) : signals.length === 0 ? (
+                <p className="text-gray-500 text-sm p-4">Nog geen signalen voor {upperSymbol}.</p>
+              ) : (
+                <>
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-800/50">
+                      <tr>
+                        <th className="px-4 py-2.5 text-left text-xs text-gray-400 font-medium">Datum</th>
+                        <th className="px-4 py-2.5 text-left text-xs text-gray-400 font-medium">Verdict</th>
+                        <th className="px-4 py-2.5 text-left text-xs text-gray-400 font-medium w-36">Score</th>
+                        <th className="px-4 py-2.5 text-right text-xs text-gray-400 font-medium">Prijs</th>
+                        <th className="px-4 py-2.5 text-left text-xs text-gray-400 font-medium hidden md:table-cell">Claude</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-800">
+                      {signals.map((s) => (
+                        <tr key={s.id} className="hover:bg-gray-800/30">
+                          <td className="px-4 py-2.5 text-gray-400 whitespace-nowrap text-xs">{relativeTime(s.createdAt)}</td>
+                          <td className="px-4 py-2.5"><VerdictBadge verdict={s.finalVerdict} /></td>
+                          <td className="px-4 py-2.5"><ScoreBar score={s.finalScore} width="w-16" /></td>
+                          <td className="px-4 py-2.5 text-right font-mono text-white text-xs">€{s.priceAtSignal.toFixed(2)}</td>
+                          <td className="px-4 py-2.5 text-gray-500 text-xs hidden md:table-cell max-w-xs truncate">
+                            {s.claudeReasoning
+                              ? s.claudeReasoning.slice(0, 60) + (s.claudeReasoning.length > 60 ? '…' : '')
+                              : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {totalSignals > 10 && (
+                    <div className="px-4 py-2.5 border-t border-gray-800">
+                      <Link
+                        to={`/signals?symbol=${upperSymbol}`}
+                        className="text-xs text-axon-400 hover:text-axon-300 transition-colors"
+                      >
+                        Bekijk alle signalen →
+                      </Link>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </section>
         </div>
       )}
 
-      {/* Insider Trading */}
-      <section>
-        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Insider transacties</h2>
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-          {insidersLoading ? (
-            <div className="animate-pulse space-y-2">
-              {Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-8 bg-gray-800 rounded" />)}
+      {activeTab === 'Nieuws' && (
+        <section>
+          <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">
+            Nieuws voor {upperSymbol}
+            {news.length > 0 && (
+              <span className="ml-2 px-2 py-0.5 rounded-full bg-gray-800 text-gray-400 text-xs font-normal">{news.length}</span>
+            )}
+          </h2>
+          <NewsTab news={news} />
+        </section>
+      )}
+
+      {activeTab === 'Fundamentals' && (
+        <div className="space-y-6">
+          {fundLoading ? (
+            <Skeleton />
+          ) : fundError || !fund ? (
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-center">
+              <p className="text-gray-400">Geen fundamentals beschikbaar voor {upperSymbol}.</p>
+              <p className="text-xs text-gray-600 mt-1">Controleer of een fundamentals provider actief is.</p>
             </div>
           ) : (
-            <InsiderTable transactions={insiders} />
+            <>
+              <section>
+                <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Waardering</h2>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                  <MetricCard label="P/E Ratio"    value={fmt(fund.peRatio)}    color={peColor(fund.peRatio)}    tooltip={TOOLTIPS.peRatio} />
+                  <MetricCard label="Forward P/E"  value={fmt(fund.forwardPe)}  color={peColor(fund.forwardPe)}  tooltip={TOOLTIPS.forwardPe} />
+                  <MetricCard label="P/B Ratio"    value={fmt(fund.pbRatio)}    color={fund.pbRatio != null && fund.pbRatio < 3 ? 'text-green-400' : 'text-yellow-400'} tooltip={TOOLTIPS.pbRatio} />
+                  <MetricCard label="P/S Ratio"    value={fmt(fund.psRatio)}    color={fund.psRatio != null && fund.psRatio < 2 ? 'text-green-400' : 'text-yellow-400'} tooltip={TOOLTIPS.psRatio} />
+                  <MetricCard label="EV/EBITDA"    value={fmt(fund.evToEbitda)} color={fund.evToEbitda != null && fund.evToEbitda < 15 ? 'text-green-400' : 'text-yellow-400'} tooltip={TOOLTIPS.evToEbitda} />
+                </div>
+              </section>
+
+              <section>
+                <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Winstgevendheid & Groei</h2>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <MetricCard label="Nettomarge"         value={fmtPct(fund.profitMargin)}      color={pctColor(fund.profitMargin)}      tooltip={TOOLTIPS.profitMargin} />
+                  <MetricCard label="Operationele marge" value={fmtPct(fund.operatingMargin)}   color={pctColor(fund.operatingMargin)}   tooltip={TOOLTIPS.operatingMargin} />
+                  <MetricCard label="ROE"                value={fmtPct(fund.returnOnEquity)}    color={pctColor(fund.returnOnEquity)}    tooltip={TOOLTIPS.returnOnEquity} />
+                  <MetricCard label="ROA"                value={fmtPct(fund.returnOnAssets)}    color={pctColor(fund.returnOnAssets)}    tooltip={TOOLTIPS.returnOnAssets} />
+                  <MetricCard label="Omzetgroei (YoY)"   value={fmtPct(fund.revenueGrowthYoy)}  color={pctColor(fund.revenueGrowthYoy)}  tooltip={TOOLTIPS.revenueGrowthYoy} />
+                  <MetricCard label="Winstgroei (YoY)"   value={fmtPct(fund.earningsGrowthYoy)} color={pctColor(fund.earningsGrowthYoy)} tooltip={TOOLTIPS.earningsGrowthYoy} />
+                </div>
+              </section>
+
+              <section>
+                <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Balans</h2>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <MetricCard label="Schuld/Eigen vermogen" value={fmt(fund.debtToEquity)} color={deColor(fund.debtToEquity)}     tooltip={TOOLTIPS.debtToEquity} />
+                  <MetricCard label="Current Ratio"         value={fmt(fund.currentRatio)} color={ratioColor(fund.currentRatio)} tooltip={TOOLTIPS.currentRatio} />
+                  <MetricCard label="Quick Ratio"           value={fmt(fund.quickRatio)}   color={ratioColor(fund.quickRatio)}   tooltip={TOOLTIPS.quickRatio} />
+                </div>
+              </section>
+
+              {(fund.dividendYield != null || fund.payoutRatio != null) && (
+                <section>
+                  <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Dividend</h2>
+                  <div className="grid grid-cols-2 gap-3 max-w-xs">
+                    <MetricCard label="Dividendrendement" value={fmtPct(fund.dividendYield)} color="text-white"                    tooltip={TOOLTIPS.dividendYield} />
+                    <MetricCard label="Uitkeringsratio"   value={fmtPct(fund.payoutRatio)}   color={payoutColor(fund.payoutRatio)} tooltip={TOOLTIPS.payoutRatio} />
+                  </div>
+                </section>
+              )}
+
+              <section>
+                <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Omvang</h2>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <MetricCard label="Marktkapitalisatie" value={fmtLarge(fund.marketCap) !== '—' ? '$' + fmtLarge(fund.marketCap) : '—'} color="text-white"                tooltip={TOOLTIPS.marketCap} />
+                  <MetricCard label="Omzet (TTM)"        value={fund.revenue   != null ? '$' + fmtLarge(fund.revenue)   : '—'} color="text-white"                tooltip={TOOLTIPS.revenue} />
+                  <MetricCard label="Nettoresultaat"     value={fund.netIncome != null ? '$' + fmtLarge(fund.netIncome) : '—'} color={pctColor(fund.netIncome)} tooltip={TOOLTIPS.netIncome} />
+                </div>
+              </section>
+
+              <section>
+                <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center">Analisten consensus<InfoTooltip text={TOOLTIPS.analystConsensus} /></h2>
+                <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                  <AnalystBar data={fund} />
+                </div>
+              </section>
+            </>
           )}
+
+          <section>
+            <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Insider transacties</h2>
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              {insidersLoading ? (
+                <div className="animate-pulse space-y-2">
+                  {Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-8 bg-gray-800 rounded" />)}
+                </div>
+              ) : (
+                <InsiderTable transactions={insiders} />
+              )}
+            </div>
+          </section>
         </div>
-      </section>
+      )}
+
+      {activeTab === 'Profiel' && (
+        <ProfileTab watchlistItem={watchlistItem} fund={fund} />
+      )}
     </div>
   );
 }
