@@ -116,7 +116,9 @@ public class SignalsController : ControllerBase
             s.TechScore,
             s.SentimentScore,
             s.ClaudeConfidence,
-            s.ClaudeDirection
+            s.ClaudeDirection,
+            s.FundamentalsScore,
+            s.NewsScore
         })});
     }
 

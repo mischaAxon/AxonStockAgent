@@ -11,6 +11,8 @@ public class SignalEntity
     public double? ClaudeConfidence { get; set; }
     public string? ClaudeDirection { get; set; }
     public string? ClaudeReasoning { get; set; }
+    public double? FundamentalsScore { get; set; }
+    public double? NewsScore { get; set; }
     public double FinalScore { get; set; }
     public string FinalVerdict { get; set; } = "";
     public double PriceAtSignal { get; set; }

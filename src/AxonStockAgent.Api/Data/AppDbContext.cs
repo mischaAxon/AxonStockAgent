@@ -53,6 +53,8 @@ public class AppDbContext : DbContext
             e.Property(x => x.ReturnPct1d).HasColumnName("return_pct_1d");
             e.Property(x => x.ReturnPct5d).HasColumnName("return_pct_5d");
             e.Property(x => x.ReturnPct20d).HasColumnName("return_pct_20d");
+            e.Property(x => x.FundamentalsScore).HasColumnName("fundamentals_score");
+            e.Property(x => x.NewsScore).HasColumnName("news_score");
         });
 
         modelBuilder.Entity<PortfolioItem>(e =>

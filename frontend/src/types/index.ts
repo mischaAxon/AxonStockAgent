@@ -8,6 +8,8 @@ export interface Signal {
   claudeConfidence: number | null;
   claudeDirection: string | null;
   claudeReasoning: string | null;
+  fundamentalsScore: number | null;
+  newsScore: number | null;
   finalScore: number;
   finalVerdict: string;
   priceAtSignal: number;
@@ -233,4 +235,6 @@ export interface LatestSignalPerSymbol {
   sentimentScore: number | null;
   claudeConfidence: number | null;
   claudeDirection: string | null;
+  fundamentalsScore: number | null;
+  newsScore: number | null;
 }

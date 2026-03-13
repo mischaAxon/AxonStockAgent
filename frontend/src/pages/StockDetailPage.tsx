@@ -6,6 +6,7 @@ import { useFundamentals, useInsiderTransactions, useWatchlist, useSignals, useN
 import type { CompanyFundamentals, InsiderTransaction, Signal, NewsArticle } from '../types';
 import { relativeTime } from '../utils/formatTime';
 import { VerdictBadge, ScoreBar, InfoTooltip } from '../components/shared';
+import PillarScoreBar from '../components/PillarScoreBar';
 import { TOOLTIPS } from '../utils/tooltipTexts';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -380,7 +381,7 @@ export default function StockDetailPage() {
       )}
 
       {/* ── Quick Stats Banner ─────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {/* Latest signal */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
           <p className="text-xs text-gray-500 mb-1.5 flex items-center">Laatste Signaal<InfoTooltip text={TOOLTIPS.verdict} /></p>
@@ -437,6 +438,23 @@ export default function StockDetailPage() {
             </p>
           ) : (
             <p className="text-gray-600 text-xl font-bold">—</p>
+          )}
+        </div>
+
+        {/* Pillar breakdown */}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+          <p className="text-xs text-gray-500 mb-2 flex items-center">Score Breakdown<InfoTooltip text="Hoe elke pijler bijdraagt aan de totaalscore: Tech (technische indicatoren), Fund (fundamentals), Sent (sentiment), AI (Claude analyse)." /></p>
+          {signalsLoading ? (
+            <div className="h-16 bg-gray-800 rounded animate-pulse" />
+          ) : latestSignal ? (
+            <PillarScoreBar
+              techScore={latestSignal.techScore}
+              sentimentScore={latestSignal.sentimentScore}
+              claudeConfidence={latestSignal.claudeConfidence}
+              fundamentalsScore={latestSignal.fundamentalsScore}
+            />
+          ) : (
+            <p className="text-gray-600 text-sm">Geen data</p>
           )}
         </div>
       </div>

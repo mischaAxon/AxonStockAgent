@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Star } from 'lucide-react';
 import { useAllSymbols, useBatchQuotes, useLatestSignalsPerSymbol, useIndicesWithSymbols, useFavorites, useToggleFavorite } from '../hooks/useApi';
 import type { MarketSymbol, Quote, LatestSignalPerSymbol, MarketIndex } from '../types';
+import { PillarDots } from '../components/PillarScoreBar';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -163,6 +164,12 @@ function Tile({
           <span className="text-[8px] text-gray-500 font-mono">
             {Math.round(signal.finalScore * 100)}
           </span>
+          <PillarDots
+            techScore={signal.techScore}
+            sentimentScore={signal.sentimentScore}
+            claudeConfidence={signal.claudeConfidence}
+            fundamentalsScore={signal.fundamentalsScore}
+          />
         </div>
       )}
     </div>
