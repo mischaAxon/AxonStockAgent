@@ -194,32 +194,78 @@ public class EodhdProvider : IMarketDataProvider, INewsProvider, IFundamentalsPr
             var response = await _http.GetAsync(url);
             var json = await response.Content.ReadAsStringAsync();
 
-            if (!response.IsSuccessStatusCode)
+            if (response.IsSuccessStatusCode)
             {
-                _logger.LogWarning("EODHD GetQuote HTTP {StatusCode} voor {Symbol} ({EodSymbol}): {Body}",
-                    (int)response.StatusCode, symbol, eodSymbol, json.Length > 200 ? json[..200] : json);
-                return null;
-            }
+                using var doc = JsonDocument.Parse(json);
+                var r = doc.RootElement;
 
+                if (!r.TryGetProperty("error", out _) && !r.TryGetProperty("message", out _))
+                {
+                    var c = r.TryGetProperty("close", out var cp) && cp.ValueKind == JsonValueKind.Number ? cp.GetDouble() : 0;
+                    if (c > 0)
+                    {
+                        var pc = r.TryGetProperty("previousClose", out var pcp) && pcp.ValueKind == JsonValueKind.Number ? pcp.GetDouble() : 0;
+                        var change = c - pc;
+                        return new Quote
+                        {
+                            Symbol        = symbol,
+                            CurrentPrice  = c,
+                            PreviousClose = pc,
+                            Change        = change,
+                            ChangePercent = pc > 0 ? change / pc * 100 : 0,
+                            High          = r.TryGetProperty("high",   out var h) && h.ValueKind == JsonValueKind.Number ? h.GetDouble() : 0,
+                            Low           = r.TryGetProperty("low",    out var l) && l.ValueKind == JsonValueKind.Number ? l.GetDouble() : 0,
+                            Open          = r.TryGetProperty("open",   out var o) && o.ValueKind == JsonValueKind.Number ? o.GetDouble() : 0,
+                            Volume        = r.TryGetProperty("volume", out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt64()  : 0,
+                            Timestamp     = DateTime.UtcNow
+                        };
+                    }
+                }
+            }
+            else
+            {
+                _logger.LogDebug("EODHD real-time HTTP {StatusCode} voor {Symbol}, probeer EOD fallback",
+                    (int)response.StatusCode, symbol);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "EODHD real-time mislukt voor {Symbol}, probeer EOD fallback", symbol);
+        }
+
+        // Fallback: gebruik meest recente EOD candle als real-time niet beschikbaar is
+        return await GetQuoteFromEodFallback(symbol, eodSymbol);
+    }
+
+    /// <summary>
+    /// Haalt de meest recente slotkoers op via het EOD endpoint.
+    /// Gebruikt als fallback wanneer het real-time endpoint geen data retourneert.
+    /// </summary>
+    private async Task<Quote?> GetQuoteFromEodFallback(string symbol, string eodSymbol)
+    {
+        await RateLimit();
+        var from = DateTime.UtcNow.AddDays(-10).ToString("yyyy-MM-dd");
+        var to   = DateTime.UtcNow.ToString("yyyy-MM-dd");
+        var url  = $"{BaseUrl}/eod/{eodSymbol}?from={from}&to={to}&period=d&api_token={_apiKey}&fmt=json";
+        try
+        {
+            var json = await _http.GetStringAsync(url);
             using var doc = JsonDocument.Parse(json);
-            var r = doc.RootElement;
+            if (doc.RootElement.ValueKind != JsonValueKind.Array) return null;
 
-            if (r.TryGetProperty("error", out _) || r.TryGetProperty("message", out _))
-            {
-                _logger.LogWarning("EODHD GetQuote error response voor {Symbol} ({EodSymbol}): {Body}",
-                    symbol, eodSymbol, json.Length > 200 ? json[..200] : json);
-                return null;
-            }
+            var candles = doc.RootElement.EnumerateArray().ToArray();
+            if (candles.Length == 0) return null;
 
-            var c = r.TryGetProperty("close", out var cp) && cp.ValueKind == JsonValueKind.Number ? cp.GetDouble() : 0;
-            if (c == 0)
-            {
-                _logger.LogDebug("EODHD GetQuote: close=0 voor {Symbol} ({EodSymbol})", symbol, eodSymbol);
-                return null;
-            }
+            var latest = candles[^1];
+            var c = SafeDouble(latest, "adjusted_close") ?? SafeDouble(latest, "close") ?? 0;
+            if (c == 0) return null;
 
-            var pc = r.TryGetProperty("previousClose", out var pcp) && pcp.ValueKind == JsonValueKind.Number ? pcp.GetDouble() : 0;
+            var pc = candles.Length > 1
+                ? SafeDouble(candles[^2], "adjusted_close") ?? SafeDouble(candles[^2], "close") ?? 0
+                : 0;
             var change = c - pc;
+
+            _logger.LogDebug("EODHD EOD fallback quote voor {Symbol}: {Price}", symbol, c);
 
             return new Quote
             {
@@ -228,16 +274,16 @@ public class EodhdProvider : IMarketDataProvider, INewsProvider, IFundamentalsPr
                 PreviousClose = pc,
                 Change        = change,
                 ChangePercent = pc > 0 ? change / pc * 100 : 0,
-                High          = r.TryGetProperty("high",   out var h) && h.ValueKind == JsonValueKind.Number ? h.GetDouble() : 0,
-                Low           = r.TryGetProperty("low",    out var l) && l.ValueKind == JsonValueKind.Number ? l.GetDouble() : 0,
-                Open          = r.TryGetProperty("open",   out var o) && o.ValueKind == JsonValueKind.Number ? o.GetDouble() : 0,
-                Volume        = r.TryGetProperty("volume", out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt64()  : 0,
+                High          = SafeDouble(latest, "high")   ?? 0,
+                Low           = SafeDouble(latest, "low")    ?? 0,
+                Open          = SafeDouble(latest, "open")   ?? 0,
+                Volume        = (long)(SafeDouble(latest, "volume") ?? 0),
                 Timestamp     = DateTime.UtcNow
             };
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "EODHD GetQuote mislukt voor {Symbol} ({EodSymbol})", symbol, eodSymbol);
+            _logger.LogWarning(ex, "EODHD EOD fallback mislukt voor {Symbol} ({EodSymbol})", symbol, eodSymbol);
             return null;
         }
     }
