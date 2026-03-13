@@ -34,6 +34,10 @@ public class NewsFetcherService : BackgroundService
 
         _logger.LogInformation("News fetcher started, interval: {Interval}s", _intervalSeconds);
 
+        // Wacht 90s na startup zodat de quote batch-calls niet geblokkeerd worden
+        // door de EODHD rate limiter (news fetcht 69 symbolen × 650ms = ~45s)
+        await Task.Delay(TimeSpan.FromSeconds(90), stoppingToken);
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
