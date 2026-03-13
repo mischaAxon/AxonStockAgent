@@ -58,7 +58,9 @@ public class ScreenerWorker : BackgroundService
 
             if (realtimeMode)
             {
-                // ── Realtime mode: scan elke N minuten tijdens markturen ──
+                // ── Realtime mode: check trigger, dan scan elke N minuten tijdens markturen ──
+                await CheckAndRunTriggerAsync(stoppingToken);
+
                 if (IsMarketHours())
                 {
                     try
@@ -82,6 +84,9 @@ public class ScreenerWorker : BackgroundService
             else
             {
                 // ── EOD mode: één scan per dag om 22:30 UTC (na US market close) ──
+                // Check ook op handmatige trigger elke minuut
+                await CheckAndRunTriggerAsync(stoppingToken);
+
                 var now          = DateTime.UtcNow;
                 var today        = DateOnly.FromDateTime(now);
                 var isAfterClose = now.TimeOfDay >= TimeSpan.FromHours(22.5);
@@ -106,8 +111,8 @@ public class ScreenerWorker : BackgroundService
                     _logger.LogDebug("EOD mode: wacht op 22:30 UTC — nu {Time} UTC", now.ToString("HH:mm"));
                 }
 
-                // Check elke 5 minuten of het tijd is voor EOD scan
-                await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
+                // Check elke minuut (voor trigger polling en EOD timing)
+                await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
             }
 
             } // end try
@@ -128,7 +133,70 @@ public class ScreenerWorker : BackgroundService
         return now.TimeOfDay >= TimeSpan.FromHours(8) && now.TimeOfDay <= TimeSpan.FromHours(21);
     }
 
-    private async Task RunScanCycleAsync(CancellationToken ct)
+    /// <summary>
+    /// Controleert of er een pending scan trigger in de DB staat.
+    /// Als ja: markeer als running, voer scan uit, markeer als completed/failed.
+    /// Geeft true terug als er een trigger verwerkt is.
+    /// </summary>
+    private async Task<bool> CheckAndRunTriggerAsync(CancellationToken ct)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        var trigger = await db.ScanTriggers
+            .Where(t => t.Status == "pending")
+            .OrderBy(t => t.CreatedAt)
+            .FirstOrDefaultAsync(ct);
+
+        if (trigger == null) return false;
+
+        trigger.Status    = "running";
+        trigger.StartedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        _logger.LogInformation("Handmatige scan trigger gevonden (id={Id}, door={By}), scan gestart",
+            trigger.Id, trigger.RequestedBy);
+
+        try
+        {
+            var (processed, signals) = await RunScanCycleAsync(ct);
+
+            // Haal trigger opnieuw op vanuit dezelfde scope (staat nu als 'running' opgeslagen)
+            using var scope2 = _scopeFactory.CreateScope();
+            var db2 = scope2.ServiceProvider.GetRequiredService<AppDbContext>();
+            var t2 = await db2.ScanTriggers.FindAsync(new object[] { trigger.Id }, ct);
+            if (t2 != null)
+            {
+                t2.Status         = "completed";
+                t2.CompletedAt    = DateTime.UtcNow;
+                t2.ProcessedCount = processed;
+                t2.SignalsCount   = signals;
+                await db2.SaveChangesAsync(ct);
+            }
+
+            _logger.LogInformation("Handmatige scan trigger (id={Id}) voltooid: {P} symbolen, {S} signalen",
+                trigger.Id, processed, signals);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            using var scope3 = _scopeFactory.CreateScope();
+            var db3 = scope3.ServiceProvider.GetRequiredService<AppDbContext>();
+            var t3 = await db3.ScanTriggers.FindAsync(new object[] { trigger.Id }, ct);
+            if (t3 != null)
+            {
+                t3.Status       = "failed";
+                t3.CompletedAt  = DateTime.UtcNow;
+                t3.ErrorMessage = ex.Message;
+                await db3.SaveChangesAsync(ct);
+            }
+
+            _logger.LogError(ex, "Handmatige scan trigger (id={Id}) mislukt", trigger.Id);
+            return false;
+        }
+    }
+
+    private async Task<(int processed, int signals)> RunScanCycleAsync(CancellationToken ct)
     {
         using var scope = _scopeFactory.CreateScope();
 
@@ -147,18 +215,42 @@ public class ScreenerWorker : BackgroundService
             cacheStatus.RealtimeMode ? "realtime" : "EOD", cacheStatus.Ttl);
 
         // ── 1. Haal actieve symbolen op ──
-        var symbols = await db.Watchlist
-            .Where(w => w.IsActive)
-            .Select(w => w.Symbol)
-            .ToListAsync(ct);
+        var scanSource = await algoSettings.GetStringAsync("scan", "scan_source", "market_symbols");
+
+        List<string> symbols;
+        if (scanSource == "watchlist")
+        {
+            symbols = await db.Watchlist
+                .Where(w => w.IsActive)
+                .Select(w => w.Symbol)
+                .ToListAsync(ct);
+            _logger.LogInformation("Scan bron: Watchlist ({Count} symbolen)", symbols.Count);
+        }
+        else
+        {
+            symbols = await db.MarketSymbols
+                .Where(m => m.IsActive)
+                .Select(m => m.Symbol)
+                .ToListAsync(ct);
+            _logger.LogInformation("Scan bron: MarketSymbols ({Count} symbolen)", symbols.Count);
+
+            if (symbols.Count == 0)
+            {
+                symbols = await db.Watchlist
+                    .Where(w => w.IsActive)
+                    .Select(w => w.Symbol)
+                    .ToListAsync(ct);
+                _logger.LogInformation("MarketSymbols leeg, fallback naar Watchlist ({Count} symbolen)", symbols.Count);
+            }
+        }
 
         if (symbols.Count == 0)
         {
-            _logger.LogInformation("Geen actieve symbolen in watchlist, skip scan");
-            return;
+            _logger.LogInformation("Geen symbolen gevonden om te scannen, skip cycle");
+            return (0, 0);
         }
 
-        _logger.LogInformation("Scan cycle gestart: {Count} symbolen", symbols.Count);
+        _logger.LogInformation("Scan cycle gestart: {Count} symbolen uit {Source}", symbols.Count, scanSource);
 
         // ── 2. Haal gewichten en thresholds op uit AlgoSettings ──
         var techWeight = (double)await algoSettings.GetDecimalAsync("weights", "technical_weight", 0.30m);
@@ -190,7 +282,7 @@ public class ScreenerWorker : BackgroundService
         if (marketProvider == null)
         {
             _logger.LogWarning("Geen actieve market data provider, skip scan");
-            return;
+            return (0, 0);
         }
 
         var claudeKeyProvider = scope.ServiceProvider.GetRequiredService<ClaudeApiKeyProvider>();
@@ -258,6 +350,8 @@ public class ScreenerWorker : BackgroundService
         _logger.LogInformation(
             "Scan cycle voltooid: {Processed}/{Total} symbolen verwerkt, {Signals} signalen gegenereerd",
             processed, symbols.Count, signalsGenerated);
+
+        return (processed, signalsGenerated);
     }
 
     /// <summary>
@@ -480,7 +574,9 @@ public class ScreenerWorker : BackgroundService
             Claude: claude,
             FinalScore: finalScore,
             FinalVerdict: verdict,
-            Summary: summary
+            Summary: summary,
+            FundamentalsScore: fundPresent ? fundNorm : null,
+            NewsScore: sentPresent ? sentNorm : null
         );
     }
 
@@ -517,7 +613,9 @@ public class ScreenerWorker : BackgroundService
             existing.TrendStatus = signal.BaseSignal.TrendStatus;
             existing.MomentumStatus = signal.BaseSignal.MomentumStatus;
             existing.VolatilityStatus = signal.BaseSignal.VolatilityStatus;
-            existing.VolumeStatus = signal.BaseSignal.VolumeStatus;
+            existing.VolumeStatus      = signal.BaseSignal.VolumeStatus;
+            existing.FundamentalsScore = signal.FundamentalsScore;
+            existing.NewsScore         = signal.NewsScore;
             // CreatedAt bewust NIET updaten — behoud originele timestamp
 
             _logger.LogDebug("📝 Signaal geüpdatet: {Symbol} {Verdict} (id={Id})",
@@ -545,8 +643,10 @@ public class ScreenerWorker : BackgroundService
             MomentumStatus = signal.BaseSignal.MomentumStatus,
             VolatilityStatus = signal.BaseSignal.VolatilityStatus,
             VolumeStatus = signal.BaseSignal.VolumeStatus,
-            Notified = false,
-            CreatedAt = DateTime.UtcNow
+            FundamentalsScore = signal.FundamentalsScore,
+            NewsScore         = signal.NewsScore,
+            Notified          = false,
+            CreatedAt         = DateTime.UtcNow
         });
 
         await db.SaveChangesAsync(ct);

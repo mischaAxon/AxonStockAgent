@@ -110,7 +110,8 @@ public class AlgoSettingsService
                 ('thresholds', 'squeeze_min_bars',        '3',    'Minimum aantal opeenvolgende squeeze-bars voor een SQUEEZE signaal', 'integer', 1,    10),
                 ('thresholds', 'squeeze_percentile',      '0.20', 'BB-width percentiel drempel voor squeeze detectie (0.20 = laagste 20%)', 'decimal', 0.05, 0.5),
                 ('scan',       'volatility_risk_enabled', 'true', 'Hoge volatiliteit verlaagt de eindscore via een risico-multiplier (0.70–1.0)', 'boolean', null, null),
-                ('scan',       'bb_width_lookback',       '120',  'Aantal bars voor BB-width percentiel ranking (squeeze detectie)', 'integer', 20, 500)
+                ('scan',       'bb_width_lookback',       '120',  'Aantal bars voor BB-width percentiel ranking (squeeze detectie)', 'integer', 20, 500),
+                ('scan',       'scan_source',             'market_symbols', 'Bron voor te scannen symbolen: market_symbols (alle actieve) of watchlist', 'string', null, null)
             ON CONFLICT (category, key) DO NOTHING;";
 
         await _db.Database.ExecuteSqlRawAsync(seedSql);
@@ -135,6 +136,15 @@ public class AlgoSettingsService
 
         if (setting == null) return defaultValue;
         return bool.TryParse(setting.Value, out var val) ? val : defaultValue;
+    }
+
+    /// <summary>Haal een specifieke waarde op als string (voor ScreenerWorker)</summary>
+    public async Task<string> GetStringAsync(string category, string key, string defaultValue = "")
+    {
+        var setting = await _db.AlgoSettings
+            .FirstOrDefaultAsync(s => s.Category == category && s.Key == key);
+
+        return setting?.Value ?? defaultValue;
     }
 
     // ── Private validatie ──────────────────────────────────────────────────────

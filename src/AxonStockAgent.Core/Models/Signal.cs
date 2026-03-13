@@ -36,7 +36,9 @@ public record AiEnrichedSignal(
     ClaudeAssessment? Claude,
     double FinalScore,
     string FinalVerdict,
-    string Summary
+    string Summary,
+    double? FundamentalsScore = null,
+    double? NewsScore = null
 );
 
 public record ClaudeAssessment(

@@ -25,6 +25,7 @@ public class AppDbContext : DbContext
     public DbSet<MarketIndexEntity> MarketIndices { get; set; }
     public DbSet<IndexMembershipEntity> IndexMemberships { get; set; }
     public DbSet<FavoriteEntity> Favorites => Set<FavoriteEntity>();
+    public DbSet<ScanTriggerEntity> ScanTriggers => Set<ScanTriggerEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -216,6 +217,17 @@ public class AppDbContext : DbContext
             e.Property(x => x.UserId).HasColumnName("user_id").HasMaxLength(100);
             e.Property(x => x.Symbol).HasColumnName("symbol").HasMaxLength(50);
             e.Property(x => x.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("NOW()");
+        });
+
+        // ScanTriggers
+        modelBuilder.Entity<ScanTriggerEntity>(e =>
+        {
+            e.ToTable("scan_triggers");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.Status);
+            e.HasIndex(x => x.CreatedAt);
+            e.Property(x => x.Status).HasDefaultValue("pending");
+            e.Property(x => x.CreatedAt).HasDefaultValueSql("NOW()");
         });
     }
 }

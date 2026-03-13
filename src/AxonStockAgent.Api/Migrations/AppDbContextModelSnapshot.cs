@@ -635,6 +635,53 @@ namespace AxonStockAgent.Api.Migrations
                     b.ToTable("watchlist", (string)null);
                 });
 
+            modelBuilder.Entity("AxonStockAgent.Api.Data.Entities.ScanTriggerEntity", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("ProcessedCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RequestedBy")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int?>("SignalsCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("pending");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("scan_triggers", (string)null);
+                });
+
             modelBuilder.Entity("AxonStockAgent.Api.Data.Entities.RefreshTokenEntity", b =>
                 {
                     b.HasOne("AxonStockAgent.Api.Data.Entities.UserEntity", "User")

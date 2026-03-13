@@ -226,7 +226,7 @@ public class SentimentAnalyzer
 
 // AI ORCHESTRATOR — combineert alle drie lagen
 
-public record AiEnrichedSignal(ScreenerSignal BaseSignal, float? MlProbability, double SentimentScore, ClaudeAssessment? Claude, double FinalScore, string FinalVerdict, string Summary);
+public record AiEnrichedSignal(ScreenerSignal BaseSignal, float? MlProbability, double SentimentScore, ClaudeAssessment? Claude, double FinalScore, string FinalVerdict, string Summary, double? FundamentalsScore = null, double? NewsScore = null);
 
 public class AiOrchestrator
 {

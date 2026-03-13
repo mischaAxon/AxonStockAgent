@@ -501,9 +501,60 @@ public class AdminController : ControllerBase
         await _db.SaveChangesAsync();
         return Ok(new { data = results, message = "NL-indexen succesvol herladen met correcte data" });
     }
+
+    // ── Scan trigger ───────────────────────────────────────────────────────────
+
+    /// <summary>Zet een handmatige scan trigger klaar. De worker pikt deze op binnen ~1 minuut.</summary>
+    [HttpPost("scan/trigger")]
+    public async Task<IActionResult> TriggerScan([FromBody] TriggerScanRequest? request = null)
+    {
+        // Annuleer eventueel nog openstaande pending triggers
+        var pending = await _db.ScanTriggers
+            .Where(t => t.Status == "pending")
+            .ToListAsync();
+        foreach (var p in pending)
+            p.Status = "cancelled";
+
+        var trigger = new ScanTriggerEntity
+        {
+            Status      = "pending",
+            RequestedBy = request?.RequestedBy ?? "admin",
+            CreatedAt   = DateTime.UtcNow,
+        };
+        _db.ScanTriggers.Add(trigger);
+        await _db.SaveChangesAsync();
+
+        return Ok(new { data = new { triggerId = trigger.Id, status = trigger.Status, message = "Scan trigger aangemaakt, worker pikt dit op binnen ~1 minuut" } });
+    }
+
+    /// <summary>Haal de status op van de laatste scan trigger.</summary>
+    [HttpGet("scan/status")]
+    public async Task<IActionResult> GetScanStatus()
+    {
+        var latest = await _db.ScanTriggers
+            .OrderByDescending(t => t.CreatedAt)
+            .FirstOrDefaultAsync();
+
+        if (latest == null)
+            return Ok(new { data = (object?)null, message = "Nog geen scan triggers aangemaakt" });
+
+        return Ok(new { data = new
+        {
+            latest.Id,
+            latest.Status,
+            latest.RequestedBy,
+            latest.CreatedAt,
+            latest.StartedAt,
+            latest.CompletedAt,
+            latest.ProcessedCount,
+            latest.SignalsCount,
+            latest.ErrorMessage,
+        }});
+    }
 }
 
 public record UpdateUserRequest(string? Role = null, bool? IsActive = null);
+public record TriggerScanRequest(string? RequestedBy = null);
 public record UpdateProviderRequest(bool? IsEnabled = null, int? Priority = null, string? ApiKey = null, string? ConfigJson = null);
 public record UpdateSettingRequest(string Value);
 public record AddExchangeRequest(string ExchangeCode, string? DisplayName = null, string? Country = null);
