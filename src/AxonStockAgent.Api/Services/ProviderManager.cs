@@ -82,6 +82,11 @@ public class ProviderManager
                 apiKey ?? "",
                 _sp.GetRequiredService<ILogger<EodhdProvider>>()),
 
+            "fmp" => new FmpProvider(
+                _sp.GetRequiredService<IHttpClientFactory>().CreateClient("fmp"),
+                apiKey ?? "",
+                _sp.GetRequiredService<ILogger<FmpProvider>>()),
+
             _ => LogUnknown(config.Name)
         };
     }
