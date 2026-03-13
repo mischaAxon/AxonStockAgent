@@ -156,6 +156,28 @@ public class ProviderManager
         return await provider.GetQuote(symbol);
     }
 
+    /// <summary>
+    /// Haal quotes op voor meerdere symbolen via één bulk API call (EODHD bulk endpoint).
+    /// Veel sneller dan losse GetQuote calls: 1 HTTP call per ~50 symbolen.
+    /// Retourneert alleen symbolen waarvoor data beschikbaar is.
+    /// </summary>
+    public async Task<Dictionary<string, Quote>> GetBulkQuotes(string[] symbols)
+    {
+        await EnsureLoaded();
+        var eodhd = _marketData!.OfType<EodhdProvider>().FirstOrDefault();
+        if (eodhd != null)
+            return await eodhd.GetBulkQuotes(symbols);
+
+        // Fallback: geen bulk provider — val terug op losse calls
+        var result = new Dictionary<string, Quote>(StringComparer.OrdinalIgnoreCase);
+        foreach (var sym in symbols)
+        {
+            var q = await GetQuote(sym);
+            if (q != null) result[sym] = q;
+        }
+        return result;
+    }
+
     /// <summary>Zoek symbolen op ticker of bedrijfsnaam via actieve providers.</summary>
     public async Task<SymbolSearchResult[]> SearchSymbols(string query)
     {

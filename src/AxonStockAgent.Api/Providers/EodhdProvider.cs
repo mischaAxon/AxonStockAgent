@@ -184,6 +184,76 @@ public class EodhdProvider : IMarketDataProvider, INewsProvider, IFundamentalsPr
         }
     }
 
+    /// <summary>
+    /// Haalt real-time quotes op voor meerdere symbolen in één API call via EODHD bulk endpoint.
+    /// Veel efficiënter dan losse GetQuote calls: 1 HTTP call voor alle symbolen.
+    /// Symbolen zonder data (NA of prijs=0) worden overgeslagen — caller kan fallback doen.
+    /// </summary>
+    public async Task<Dictionary<string, Quote>> GetBulkQuotes(string[] symbols)
+    {
+        var result = new Dictionary<string, Quote>(StringComparer.OrdinalIgnoreCase);
+        if (symbols.Length == 0) return result;
+
+        await RateLimit();
+
+        // Bulk endpoint: /real-time/{first}?s={rest}&api_token=...&fmt=json
+        var eodSymbols = symbols.Select(ToEodhdSymbol).ToArray();
+        var first = eodSymbols[0];
+        var rest  = eodSymbols.Length > 1 ? "&s=" + string.Join(",", eodSymbols[1..]) : "";
+        var url   = $"{BaseUrl}/real-time/{first}?api_token={_apiKey}{rest}&fmt=json";
+
+        try
+        {
+            var json = await _http.GetStringAsync(url);
+            using var doc = JsonDocument.Parse(json);
+
+            // Response is een array (bulk) of object (single symbol zonder &s=)
+            var elements = doc.RootElement.ValueKind == JsonValueKind.Array
+                ? doc.RootElement.EnumerateArray().ToList()
+                : new List<JsonElement> { doc.RootElement };
+
+            foreach (var r in elements)
+            {
+                if (!r.TryGetProperty("code", out var codeProp)) continue;
+                var eodCode = codeProp.GetString() ?? "";
+
+                // Zoek het originele symbool terug op basis van eod-code
+                var originalSymbol = symbols.FirstOrDefault(s =>
+                    string.Equals(ToEodhdSymbol(s), eodCode, StringComparison.OrdinalIgnoreCase))
+                    ?? eodCode;
+
+                var c = r.TryGetProperty("close", out var cp) && cp.ValueKind == JsonValueKind.Number ? cp.GetDouble() : 0;
+                if (c <= 0) continue; // NA of geen data
+
+                var pc     = r.TryGetProperty("previousClose", out var pcp) && pcp.ValueKind == JsonValueKind.Number ? pcp.GetDouble() : 0;
+                var change = c - pc;
+
+                result[originalSymbol] = new Quote
+                {
+                    Symbol        = originalSymbol,
+                    CurrentPrice  = c,
+                    PreviousClose = pc,
+                    Change        = change,
+                    ChangePercent = pc > 0 ? change / pc * 100 : 0,
+                    High          = r.TryGetProperty("high",   out var h) && h.ValueKind == JsonValueKind.Number ? h.GetDouble() : 0,
+                    Low           = r.TryGetProperty("low",    out var l) && l.ValueKind == JsonValueKind.Number ? l.GetDouble() : 0,
+                    Open          = r.TryGetProperty("open",   out var o) && o.ValueKind == JsonValueKind.Number ? o.GetDouble() : 0,
+                    Volume        = r.TryGetProperty("volume", out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt64()  : 0,
+                    Timestamp     = DateTime.UtcNow
+                };
+            }
+
+            _logger.LogDebug("EODHD bulk quotes: {Count}/{Total} resultaten voor [{Symbols}]",
+                result.Count, symbols.Length, string.Join(",", symbols.Take(5)));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "EODHD bulk quotes mislukt voor {Count} symbolen", symbols.Length);
+        }
+
+        return result;
+    }
+
     public async Task<Quote?> GetQuote(string symbol)
     {
         await RateLimit();

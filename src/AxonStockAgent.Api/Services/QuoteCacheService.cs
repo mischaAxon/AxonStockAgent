@@ -53,14 +53,15 @@ public class QuoteCacheService
 
     /// <summary>
     /// Haal quotes op voor meerdere symbolen. Gebruikt cache waar mogelijk.
-    /// Missers worden opgehaald met max 5 gelijktijdige EODHD calls (rate limit bescherming).
+    /// Cache-misses worden opgehaald via EODHD bulk endpoint (1 HTTP call voor alle misses).
+    /// Symbolen die de bulk niet retourneert (EOD-only of delisted) krijgen individuele EOD fallback.
     /// </summary>
     public async Task<Dictionary<string, Quote>> GetBatchQuotes(string[] symbols)
     {
         var results = new Dictionary<string, Quote>();
         var misses  = new List<string>();
 
-        // Check cache eerst
+        // ── 1. Check cache ──
         foreach (var symbol in symbols)
         {
             var cacheKey = $"quote:{symbol.ToUpper()}";
@@ -70,66 +71,63 @@ public class QuoteCacheService
                 misses.Add(symbol);
         }
 
-        if (misses.Count > 0)
+        if (misses.Count == 0) return results;
+
+        _logger.LogInformation("QuoteCache batch: {Hits} cache hits, {Misses} misses van {Total}",
+            results.Count, misses.Count, symbols.Length);
+
+        // ── 2. Bulk fetch via EODHD bulk endpoint (1 HTTP call!) ──
+        var bulkResults = await _providers.GetBulkQuotes(misses.ToArray());
+
+        foreach (var (symbol, quote) in bulkResults)
         {
-            _logger.LogInformation("QuoteCache batch: {Hits} cache hits, {Misses} misses van {Total} gevraagd",
-                results.Count, misses.Count, symbols.Length);
+            CacheAndStore(results, symbol, quote, isEodFallback: false);
+        }
 
-            // Beperk parallelisme: max 5 gelijktijdige EODHD calls
-            using var semaphore = new SemaphoreSlim(5, 5);
+        // ── 3. EOD fallback voor symbolen die de bulk niet retourneerde ──
+        var stillMissing = misses.Where(m => !results.ContainsKey(m)).ToList();
 
-            var tasks = misses.Select(async symbol =>
+        if (stillMissing.Count > 0)
+        {
+            _logger.LogDebug("QuoteCache: {Count} symbolen niet in bulk, probeer EOD fallback: [{Syms}]",
+                stillMissing.Count, string.Join(", ", stillMissing));
+
+            foreach (var symbol in stillMissing)
             {
-                await semaphore.WaitAsync();
                 try
                 {
                     var quote = await _providers.GetQuote(symbol);
-                    return (symbol, quote);
+                    if (quote != null)
+                        CacheAndStore(results, symbol, quote, isEodFallback: true);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogDebug("Quote fout voor {Symbol}: {Msg}", symbol, ex.Message);
-                    return (symbol, (Quote?)null);
+                    _logger.LogDebug("EOD fallback mislukt voor {Symbol}: {Msg}", symbol, ex.Message);
                 }
-                finally
-                {
-                    semaphore.Release();
-                }
-            });
-
-            var fetchResults = await Task.WhenAll(tasks);
-
-            int fetched = 0, failed = 0;
-            foreach (var (symbol, quote) in fetchResults)
-            {
-                if (quote != null)
-                {
-                    var cacheKey       = $"quote:{symbol.ToUpper()}";
-                    var isEodFallback  = quote.Volume == 0 || quote.Open == 0;
-                    var ttl            = isEodFallback ? EodCacheDuration : CacheDuration;
-
-                    _cache.Set(cacheKey, quote, new MemoryCacheEntryOptions
-                    {
-                        AbsoluteExpirationRelativeToNow = ttl,
-                        Size = 1
-                    });
-                    results[symbol] = quote;
-                    fetched++;
-                }
-                else
-                {
-                    failed++;
-                }
-            }
-
-            if (failed > 0)
-            {
-                var stillMissing = misses.Where(m => !results.ContainsKey(m)).Take(10);
-                _logger.LogWarning("QuoteCache: {Fetched} opgehaald, {Failed} mislukt. Voorbeelden: [{Examples}]",
-                    fetched, failed, string.Join(", ", stillMissing));
             }
         }
 
+        var totalFailed = symbols.Length - results.Count;
+        if (totalFailed > 0)
+        {
+            var failedSyms = symbols.Where(s => !results.ContainsKey(s)).Take(10);
+            _logger.LogWarning("QuoteCache: {Failed} symbolen zonder quote: [{Syms}]",
+                totalFailed, string.Join(", ", failedSyms));
+        }
+
         return results;
+    }
+
+    private void CacheAndStore(Dictionary<string, Quote> results, string symbol, Quote quote, bool isEodFallback)
+    {
+        var cacheKey = $"quote:{symbol.ToUpper()}";
+        var ttl      = isEodFallback ? EodCacheDuration : CacheDuration;
+
+        _cache.Set(cacheKey, quote, new MemoryCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = ttl,
+            Size = 1
+        });
+        results[symbol] = quote;
     }
 }
