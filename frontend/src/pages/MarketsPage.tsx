@@ -5,6 +5,40 @@ import { useAllSymbols, useBatchQuotes, useLatestSignalsPerSymbol, useIndicesWit
 import type { MarketSymbol, Quote, LatestSignalPerSymbol, MarketIndex } from '../types';
 import { PillarDots } from '../components/PillarScoreBar';
 
+// ── StatusPill ────────────────────────────────────────────────────────────────
+
+function StatusPill({
+  label,
+  count,
+  total,
+  loading,
+  fetching,
+}: {
+  label: string;
+  count: number;
+  total?: number;
+  loading: boolean;
+  fetching: boolean;
+}) {
+  const dot = loading
+    ? 'bg-yellow-400 animate-pulse'
+    : fetching
+    ? 'bg-axon-400 animate-pulse'
+    : count > 0
+    ? 'bg-green-500'
+    : 'bg-gray-600';
+
+  return (
+    <span className="flex items-center gap-1 text-[10px] text-gray-500">
+      <span className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot}`} />
+      <span className="text-gray-500">{label}</span>
+      <span className={count > 0 ? 'text-gray-300' : 'text-gray-600'}>
+        {loading ? '…' : total != null ? `${count}/${total}` : count}
+      </span>
+    </span>
+  );
+}
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function countryFlag(code: string | null): string {
@@ -265,10 +299,10 @@ export default function MarketsPage() {
   }, [indices, allMarketSymbols]);
 
   const symbolTickers = useMemo(() => allSymbols.map(s => s.symbol), [allSymbols]);
-  const { data: quotesData } = useBatchQuotes(symbolTickers);
+  const { data: quotesData, isLoading: quotesLoading, isFetching: quotesFetching, loadedCount: quotesLoaded } = useBatchQuotes(symbolTickers);
   const quotes: Record<string, Quote> = quotesData?.data ?? {};
 
-  const { data: signalsData } = useLatestSignalsPerSymbol(7);
+  const { data: signalsData, isFetching: signalsFetching } = useLatestSignalsPerSymbol(7);
   const signalMap = useMemo(() => {
     const map: Record<string, LatestSignalPerSymbol> = {};
     for (const sig of signalsData?.data ?? []) {
@@ -284,7 +318,7 @@ export default function MarketsPage() {
     return new Set<string>(favoritesData?.data ?? []);
   }, [favoritesData]);
 
-  const { data: sentimentData } = useSentimentChanges(7);
+  const { data: sentimentData, isFetching: sentimentFetching } = useSentimentChanges(7);
   const sentimentMap = useMemo(() => {
     const map = new Map<string, number>();
     for (const item of sentimentData?.data ?? []) {
@@ -409,7 +443,25 @@ export default function MarketsPage() {
             <span className="text-green-400">{gainers} ▲</span>
             <span className="text-red-400">{losers} ▼</span>
             <span className="text-gray-700">|</span>
-            <span className="text-gray-500">{Object.keys(quotes).length} live</span>
+            <StatusPill
+              label="Prijzen"
+              count={quotesLoaded}
+              total={symbolTickers.length}
+              loading={quotesLoading}
+              fetching={quotesFetching}
+            />
+            <StatusPill
+              label="Signalen"
+              count={Object.keys(signalMap).length}
+              loading={indicesLoading}
+              fetching={signalsFetching}
+            />
+            <StatusPill
+              label="Nieuws"
+              count={sentimentMap.size}
+              loading={indicesLoading}
+              fetching={sentimentFetching}
+            />
           </div>
         </div>
 

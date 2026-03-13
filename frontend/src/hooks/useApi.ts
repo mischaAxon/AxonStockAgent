@@ -300,9 +300,13 @@ export function useBatchQuotes(symbols: string[]) {
     return { data: merged };
   }, [queries]);
 
-  const isLoading = queries.some(q => q.isLoading);
+  const isLoading  = queries.some(q => q.isLoading);
+  const isFetching = queries.some(q => q.isFetching);
+  const loadedCount = Object.keys(
+    queries.reduce((acc, q) => (q.data?.data ? Object.assign(acc, q.data.data) : acc), {} as Record<string, unknown>)
+  ).length;
 
-  return { data, isLoading };
+  return { data, isLoading, isFetching, loadedCount };
 }
 
 export function useIndicesWithSymbols() {
