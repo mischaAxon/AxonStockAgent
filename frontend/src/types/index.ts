@@ -29,21 +29,6 @@ export interface Signal {
   outcomeCorrect: boolean | null;
 }
 
-export interface WatchlistItem {
-  id: number;
-  symbol: string;
-  exchange: string | null;
-  name: string | null;
-  sector: string | null;
-  industry: string | null;
-  country: string | null;
-  marketCap: number | null;
-  logo: string | null;
-  webUrl: string | null;
-  sectorSource: string | null;
-  isActive: boolean;
-  addedAt: string;
-}
 
 export interface PortfolioItem {
   id: number;
@@ -56,7 +41,6 @@ export interface PortfolioItem {
 }
 
 export interface DashboardData {
-  watchlistCount: number;
   portfolioPositions: number;
   portfolioEstimatedValue: number;
   signals: {

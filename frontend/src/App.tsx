@@ -2,7 +2,6 @@ import { Routes, Route } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import SignalsPage from './pages/SignalsPage';
-import SectorsPage from './pages/SectorsPage';
 import NewsPage from './pages/NewsPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -30,7 +29,6 @@ export default function App() {
       >
         <Route path="/"          element={<MarketsPage />} />
         <Route path="/signals"   element={<SignalsPage />} />
-        <Route path="/sectors"   element={<SectorsPage />} />
         <Route path="/news"      element={<NewsPage />} />
         <Route path="/stock/:symbol" element={<StockDetailPage />} />
 

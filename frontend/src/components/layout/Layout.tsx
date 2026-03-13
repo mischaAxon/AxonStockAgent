@@ -1,12 +1,11 @@
 import { Outlet, NavLink } from 'react-router-dom';
-import { Activity, Grid2x2, Users, Plug, LogOut, Newspaper, Settings, Globe } from 'lucide-react';
+import { Activity, Users, Plug, LogOut, Newspaper, Settings, Globe } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { NewsTicker } from '../NewsTicker';
 
 const navItems = [
   { to: '/',          label: 'Markets',   icon: Globe,           end: true  },
   { to: '/signals',   label: 'Signalen',  icon: Activity,        end: false },
-  { to: '/sectors',   label: 'Sectoren',  icon: Grid2x2,         end: false },
   { to: '/news',      label: 'Nieuws',    icon: Newspaper,       end: false },
 ];
 

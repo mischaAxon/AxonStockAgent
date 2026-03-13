@@ -24,9 +24,6 @@ public class DashboardController : ControllerBase
         var today = now.Date;
         var weekAgo = today.AddDays(-7);
 
-        // Watchlist count
-        var watchlistCount = await _db.Watchlist.CountAsync(w => w.IsActive);
-
         // Portfolio summary
         var portfolio = await _db.Portfolio.ToListAsync();
         var portfolioValue = portfolio.Sum(p => p.Shares * (p.AvgBuyPrice ?? 0));
@@ -64,7 +61,6 @@ public class DashboardController : ControllerBase
         {
             data = new
             {
-                watchlistCount,
                 portfolioPositions = portfolio.Count,
                 portfolioEstimatedValue = portfolioValue,
                 signals = new { weekBuys, weekSells, weekSqueezes },

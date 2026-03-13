@@ -67,7 +67,6 @@ builder.Services.AddSwaggerGen(c =>
 builder.Services.AddScoped<JwtService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<ProviderManager>();
-builder.Services.AddScoped<SectorService>();
 builder.Services.AddScoped<NewsService>();
 builder.Services.AddScoped<FundamentalsService>();
 builder.Services.AddScoped<AlgoSettingsService>();

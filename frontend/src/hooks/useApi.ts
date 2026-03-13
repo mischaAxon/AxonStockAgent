@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient, useQueries } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { api } from '../services/api';
-import type { ApiResponse, PaginatedResponse, DashboardData, Signal, WatchlistItem, PortfolioItem, NewsArticle, SectorSentiment, TrendingSymbol, CompanyFundamentals, InsiderTransaction, AlgoSettingsResponse, ExchangeInfo, MarketSymbol, Quote, LatestSignalPerSymbol, MarketIndex, SentimentChange } from '../types';
+import type { ApiResponse, PaginatedResponse, DashboardData, Signal, PortfolioItem, NewsArticle, SectorSentiment, TrendingSymbol, CompanyFundamentals, InsiderTransaction, AlgoSettingsResponse, ExchangeInfo, MarketSymbol, Quote, LatestSignalPerSymbol, MarketIndex, SentimentChange } from '../types';
 
 // Dashboard
 export function useDashboard() {
@@ -28,31 +28,6 @@ export function useLatestSignals(count = 10) {
   return useQuery({
     queryKey: ['signals', 'latest', count],
     queryFn: () => api.get<ApiResponse<Signal[]>>(`/v1/signals/latest?count=${count}`),
-  });
-}
-
-// Watchlist
-export function useWatchlist() {
-  return useQuery({
-    queryKey: ['watchlist'],
-    queryFn: () => api.get<ApiResponse<WatchlistItem[]>>('/v1/watchlist'),
-  });
-}
-
-export function useAddToWatchlist() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: { symbol: string; exchange?: string; name?: string }) =>
-      api.post('/v1/watchlist', data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['watchlist'] }),
-  });
-}
-
-export function useRemoveFromWatchlist() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (symbol: string) => api.delete(`/v1/watchlist/${symbol}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['watchlist'] }),
   });
 }
 
@@ -83,25 +58,6 @@ export function useDeletePortfolio() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['portfolio'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-    },
-  });
-}
-
-// Sectors
-export function useSectors() {
-  return useQuery({
-    queryKey: ['sectors'],
-    queryFn: () => api.get<ApiResponse<{ sector: string; count: number }[]>>('/v1/sectors'),
-  });
-}
-
-export function useEnrichWatchlist() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: () => api.post('/v1/sectors/enrich', {}),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['watchlist'] });
-      queryClient.invalidateQueries({ queryKey: ['sectors'] });
     },
   });
 }
