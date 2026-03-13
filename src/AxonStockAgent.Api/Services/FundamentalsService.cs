@@ -195,4 +195,50 @@ public class FundamentalsService
         }
         return refreshed;
     }
+
+    /// <summary>
+    /// Vernieuwt fundamentals voor alle actieve MarketSymbols.
+    /// Rate-limited: 2 seconden pauze tussen symbolen (EODHD rate limit).
+    /// Retourneert (total, success, failed).
+    /// </summary>
+    public async Task<(int total, int success, int failed)> RefreshAllMarketSymbolsFundamentals(
+        IProgress<(int current, int total, string symbol)>? progress = null)
+    {
+        var symbols = await _db.MarketSymbols
+            .Where(m => m.IsActive)
+            .Select(m => m.Symbol)
+            .ToListAsync();
+
+        int success = 0, failed = 0;
+
+        for (int i = 0; i < symbols.Count; i++)
+        {
+            var symbol = symbols[i];
+            progress?.Report((i + 1, symbols.Count, symbol));
+
+            try
+            {
+                var result = await GetFundamentals(symbol, forceRefresh: true);
+                if (result != null)
+                    success++;
+                else
+                    failed++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Fundamentals refresh mislukt voor {Symbol}: {Message}", symbol, ex.Message);
+                failed++;
+            }
+
+            // Rate limiting: EODHD doet 3 calls per symbool (metrics + ratings + target)
+            // Bij 90 calls/min max → 30 symbolen/min → 2 sec per symbool
+            await Task.Delay(2000);
+        }
+
+        _logger.LogInformation(
+            "Fundamentals bulk refresh voltooid: {Total} symbolen, {Success} succesvol, {Failed} mislukt",
+            symbols.Count, success, failed);
+
+        return (symbols.Count, success, failed);
+    }
 }

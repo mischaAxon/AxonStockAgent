@@ -551,6 +551,60 @@ public class AdminController : ControllerBase
             latest.ErrorMessage,
         }});
     }
+
+    // ── Fundamentals Bulk Refresh ──────────────────────────────────────────────
+
+    /// <summary>
+    /// Refresh fundamentals voor alle actieve MarketSymbols.
+    /// Duurt ~3-4 minuten voor 98 symbolen (EODHD rate limited).
+    /// </summary>
+    [HttpPost("fundamentals/refresh-all")]
+    public async Task<IActionResult> RefreshAllFundamentals([FromServices] FundamentalsService fundamentalsService)
+    {
+        var (total, success, failed) = await fundamentalsService.RefreshAllMarketSymbolsFundamentals();
+
+        return Ok(new
+        {
+            data = new { total, success, failed },
+            message = $"Fundamentals refresh voltooid: {success}/{total} succesvol"
+        });
+    }
+
+    /// <summary>Toont de huidige staat van fundamentals data.</summary>
+    [HttpGet("fundamentals/status")]
+    public async Task<IActionResult> GetFundamentalsStatus()
+    {
+        var totalSymbols = await _db.MarketSymbols.CountAsync(m => m.IsActive);
+        var withFundamentals = await _db.CompanyFundamentals.CountAsync();
+        var recentFundamentals = await _db.CompanyFundamentals
+            .CountAsync(f => f.FetchedAt >= DateTime.UtcNow.AddHours(-24));
+        var staleFundamentals = await _db.CompanyFundamentals
+            .CountAsync(f => f.FetchedAt < DateTime.UtcNow.AddDays(-7));
+
+        var oldestFetch = await _db.CompanyFundamentals
+            .OrderBy(f => f.FetchedAt)
+            .Select(f => f.FetchedAt)
+            .FirstOrDefaultAsync();
+
+        var newestFetch = await _db.CompanyFundamentals
+            .OrderByDescending(f => f.FetchedAt)
+            .Select(f => f.FetchedAt)
+            .FirstOrDefaultAsync();
+
+        return Ok(new
+        {
+            data = new
+            {
+                totalSymbols,
+                withFundamentals,
+                missingFundamentals = totalSymbols - withFundamentals,
+                recentLast24h = recentFundamentals,
+                staleOlderThan7d = staleFundamentals,
+                oldestFetch,
+                newestFetch
+            }
+        });
+    }
 }
 
 public record UpdateUserRequest(string? Role = null, bool? IsActive = null);

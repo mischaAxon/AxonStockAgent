@@ -46,6 +46,7 @@ public class ScreenerWorker : BackgroundService
         await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
 
         DateOnly? lastEodScanDate = null;
+        DateOnly? lastFundamentalsRefresh = null;
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -100,6 +101,24 @@ public class ScreenerWorker : BackgroundService
                         _logger.LogInformation("EOD scan gestart ({Time} UTC)", now.ToString("HH:mm"));
                         await RunScanCycleAsync(stoppingToken);
                         lastEodScanDate = today;
+
+                        // Weekelijkse fundamentals refresh (zondagnacht)
+                        if (now.DayOfWeek == DayOfWeek.Sunday && lastFundamentalsRefresh != today)
+                        {
+                            try
+                            {
+                                using var fundScope = _scopeFactory.CreateScope();
+                                var fundService = fundScope.ServiceProvider.GetRequiredService<FundamentalsService>();
+                                _logger.LogInformation("Wekelijkse fundamentals refresh gestart");
+                                var (total, success, failed) = await fundService.RefreshAllMarketSymbolsFundamentals();
+                                _logger.LogInformation("Fundamentals refresh: {Success}/{Total} succesvol, {Failed} mislukt", success, total, failed);
+                                lastFundamentalsRefresh = today;
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogError(ex, "Wekelijkse fundamentals refresh mislukt");
+                            }
+                        }
                     }
                     catch (Exception ex)
                     {
