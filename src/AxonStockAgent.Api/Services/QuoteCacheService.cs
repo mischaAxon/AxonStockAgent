@@ -5,7 +5,7 @@ namespace AxonStockAgent.Api.Services;
 
 /// <summary>
 /// In-memory cache voor realtime quotes.
-/// Elke quote wordt 30 seconden gecacht om API rate limits te respecteren.
+/// Real-time quotes worden 30 seconden gecacht; EOD fallback quotes 15 minuten.
 /// </summary>
 public class QuoteCacheService
 {
@@ -13,7 +13,8 @@ public class QuoteCacheService
     private readonly ProviderManager _providers;
     private readonly ILogger<QuoteCacheService> _logger;
 
-    private static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan CacheDuration    = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan EodCacheDuration = TimeSpan.FromMinutes(15);
 
     public QuoteCacheService(IMemoryCache cache, ProviderManager providers, ILogger<QuoteCacheService> logger)
     {
@@ -23,7 +24,7 @@ public class QuoteCacheService
     }
 
     /// <summary>
-    /// Haal een quote op, met cache. Gecachte quotes zijn maximaal 30 seconden oud.
+    /// Haal een quote op, met cache. Gecachte quotes zijn maximaal 30s (RT) of 15m (EOD) oud.
     /// </summary>
     public async Task<Quote?> GetQuote(string symbol)
     {
@@ -36,9 +37,13 @@ public class QuoteCacheService
 
         if (quote != null)
         {
+            // EOD fallback quotes veranderen niet intraday — langer cachen
+            var isEodFallback = quote.Volume == 0 || quote.Open == 0;
+            var ttl = isEodFallback ? EodCacheDuration : CacheDuration;
+
             _cache.Set(cacheKey, quote, new MemoryCacheEntryOptions
             {
-                AbsoluteExpirationRelativeToNow = CacheDuration,
+                AbsoluteExpirationRelativeToNow = ttl,
                 Size = 1
             });
         }
@@ -48,12 +53,12 @@ public class QuoteCacheService
 
     /// <summary>
     /// Haal quotes op voor meerdere symbolen. Gebruikt cache waar mogelijk.
-    /// Missers worden parallel opgehaald bij de provider.
+    /// Missers worden opgehaald met max 5 gelijktijdige EODHD calls (rate limit bescherming).
     /// </summary>
     public async Task<Dictionary<string, Quote>> GetBatchQuotes(string[] symbols)
     {
         var results = new Dictionary<string, Quote>();
-        var misses = new List<string>();
+        var misses  = new List<string>();
 
         // Check cache eerst
         foreach (var symbol in symbols)
@@ -67,12 +72,15 @@ public class QuoteCacheService
 
         if (misses.Count > 0)
         {
-            _logger.LogInformation("QuoteCache batch: {Hits} hits, {Misses} misses van {Total} gevraagd. Eerste misses: {FirstMisses}",
-                results.Count, misses.Count, results.Count + misses.Count,
-                string.Join(", ", misses.Take(5)));
+            _logger.LogInformation("QuoteCache batch: {Hits} cache hits, {Misses} misses van {Total} gevraagd",
+                results.Count, misses.Count, symbols.Length);
+
+            // Beperk parallelisme: max 5 gelijktijdige EODHD calls
+            using var semaphore = new SemaphoreSlim(5, 5);
 
             var tasks = misses.Select(async symbol =>
             {
+                await semaphore.WaitAsync();
                 try
                 {
                     var quote = await _providers.GetQuote(symbol);
@@ -83,27 +91,42 @@ public class QuoteCacheService
                     _logger.LogWarning(ex, "Fout bij ophalen quote voor {Symbol}", symbol);
                     return (symbol, (Quote?)null);
                 }
+                finally
+                {
+                    semaphore.Release();
+                }
             });
 
-            foreach (var (symbol, quote) in await Task.WhenAll(tasks))
+            var fetchResults = await Task.WhenAll(tasks);
+
+            int fetched = 0, failed = 0;
+            foreach (var (symbol, quote) in fetchResults)
             {
                 if (quote != null)
                 {
-                    var cacheKey = $"quote:{symbol.ToUpper()}";
+                    var cacheKey       = $"quote:{symbol.ToUpper()}";
+                    var isEodFallback  = quote.Volume == 0 || quote.Open == 0;
+                    var ttl            = isEodFallback ? EodCacheDuration : CacheDuration;
+
                     _cache.Set(cacheKey, quote, new MemoryCacheEntryOptions
                     {
-                        AbsoluteExpirationRelativeToNow = CacheDuration,
+                        AbsoluteExpirationRelativeToNow = ttl,
                         Size = 1
                     });
                     results[symbol] = quote;
+                    fetched++;
+                }
+                else
+                {
+                    failed++;
                 }
             }
 
-            var stillMissing = misses.Where(m => !results.ContainsKey(m)).ToList();
-            if (stillMissing.Count > 0)
+            if (failed > 0)
             {
-                _logger.LogWarning("QuoteCache: {Count} symbolen retourneerden null na API call. Voorbeelden: {Examples}",
-                    stillMissing.Count, string.Join(", ", stillMissing.Take(5)));
+                var stillMissing = misses.Where(m => !results.ContainsKey(m)).Take(10);
+                _logger.LogWarning("QuoteCache: {Fetched} opgehaald, {Failed} mislukt. Voorbeelden: [{Examples}]",
+                    fetched, failed, string.Join(", ", stillMissing));
             }
         }
 

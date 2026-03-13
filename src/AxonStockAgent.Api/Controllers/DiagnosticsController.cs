@@ -312,4 +312,63 @@ public class DiagnosticsController : ControllerBase
             sampleSuccesses = successes.Take(10)
         });
     }
+
+    /// <summary>
+    /// Diepgaande quote diagnose voor één symbool.
+    /// Toont resultaat via cache, direct via provider, DB-status en index-lidmaatschap.
+    /// </summary>
+    [HttpGet("quote-diagnose/{symbol}")]
+    public async Task<IActionResult> DiagnoseQuote(string symbol)
+    {
+        var provider = await _providers.GetMarketDataProvider();
+        if (provider == null)
+            return Ok(new { symbol, error = "Geen actieve market data provider" });
+
+        var results = new Dictionary<string, object>();
+
+        // Test 1: Via QuoteCacheService (de normale flow)
+        try
+        {
+            var quote = await _quoteCache.GetQuote(symbol);
+            results["cacheResult"] = quote != null
+                ? (object)new { success = true,  price = quote.CurrentPrice, change = quote.ChangePercent }
+                : new { success = false, price = (double?)null, change = (double?)null };
+        }
+        catch (Exception ex)
+        {
+            results["cacheResult"] = new { success = false, error = ex.Message };
+        }
+
+        // Test 2: Direct via provider (bypass cache)
+        try
+        {
+            var quote = await provider.GetQuote(symbol);
+            results["directResult"] = quote != null
+                ? (object)new { success = true,  price = quote.CurrentPrice, change = quote.ChangePercent }
+                : new { success = false, price = (double?)null, change = (double?)null };
+        }
+        catch (Exception ex)
+        {
+            results["directResult"] = new { success = false, error = ex.Message };
+        }
+
+        // Test 3: DB-status
+        var dbSymbol = await _db.MarketSymbols
+            .Where(m => m.Symbol == symbol.ToUpper())
+            .Select(m => new { m.Symbol, m.IsActive, m.Exchange, m.Name })
+            .FirstOrDefaultAsync();
+        results["dbStatus"] = dbSymbol ?? (object)new { error = "Niet gevonden in MarketSymbols" };
+
+        // Test 4: Fundamentals aanwezig?
+        results["hasFundamentals"] = await _db.CompanyFundamentals
+            .AnyAsync(f => f.Symbol == symbol.ToUpper());
+
+        // Test 5: Index-lidmaatschap
+        results["indices"] = await _db.IndexMemberships
+            .Where(m => m.Symbol == symbol.ToUpper())
+            .Join(_db.MarketIndices, m => m.MarketIndexId, i => i.Id, (m, i) => i.DisplayName)
+            .ToListAsync();
+
+        return Ok(new { symbol, provider = provider.Name, tests = results });
+    }
 }
