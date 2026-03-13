@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Star } from 'lucide-react';
-import { useAllSymbols, useBatchQuotes, useLatestSignalsPerSymbol, useIndicesWithSymbols, useFavorites, useToggleFavorite } from '../hooks/useApi';
+import { useAllSymbols, useBatchQuotes, useLatestSignalsPerSymbol, useIndicesWithSymbols, useFavorites, useToggleFavorite, useSentimentChanges } from '../hooks/useApi';
 import type { MarketSymbol, Quote, LatestSignalPerSymbol, MarketIndex } from '../types';
 import { PillarDots } from '../components/PillarScoreBar';
 
@@ -98,6 +98,7 @@ function Tile({
   onClick,
   isFavorite,
   onToggleFavorite,
+  sentimentChange,
 }: {
   symbol: MarketSymbol;
   quote: Quote | undefined;
@@ -105,6 +106,7 @@ function Tile({
   onClick: () => void;
   isFavorite: boolean;
   onToggleFavorite: () => void;
+  sentimentChange: number | undefined;
 }) {
   let bg = 'bg-gray-900/80';
   let border = 'border-gray-800/60';
@@ -172,6 +174,13 @@ function Tile({
           />
         </div>
       )}
+      {sentimentChange != null && (
+        <div className={`text-[8px] font-mono leading-tight ${
+          sentimentChange > 0 ? 'text-green-400/70' : sentimentChange < 0 ? 'text-red-400/70' : 'text-gray-600'
+        }`}>
+          S:{sentimentChange > 0 ? '+' : ''}{sentimentChange.toFixed(1)}%
+        </div>
+      )}
     </div>
   );
 }
@@ -187,6 +196,7 @@ function ExchangeColumn({
   onSymbolClick,
   favoriteSet,
   onToggleFavorite,
+  sentimentMap,
 }: {
   exchange: string;
   country: string;
@@ -196,6 +206,7 @@ function ExchangeColumn({
   onSymbolClick: (symbol: string) => void;
   favoriteSet: Set<string>;
   onToggleFavorite: (symbol: string) => void;
+  sentimentMap: Map<string, number>;
 }) {
   return (
     <div className="flex flex-col min-w-[130px]">
@@ -216,6 +227,7 @@ function ExchangeColumn({
             onClick={() => onSymbolClick(sym.symbol)}
             isFavorite={favoriteSet.has(sym.symbol)}
             onToggleFavorite={() => onToggleFavorite(sym.symbol)}
+            sentimentChange={sentimentMap.get(sym.symbol)}
           />
         ))}
       </div>
@@ -271,6 +283,17 @@ export default function MarketsPage() {
   const favoriteSet = useMemo(() => {
     return new Set<string>(favoritesData?.data ?? []);
   }, [favoritesData]);
+
+  const { data: sentimentData } = useSentimentChanges(7);
+  const sentimentMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of sentimentData?.data ?? []) {
+      if (item.sentimentChange != null) {
+        map.set(item.symbol, item.sentimentChange);
+      }
+    }
+    return map;
+  }, [sentimentData]);
 
   const navigate = useNavigate();
 
@@ -478,6 +501,7 @@ export default function MarketsPage() {
               onSymbolClick={symbol => navigate(`/stock/${symbol}`)}
               favoriteSet={favoriteSet}
               onToggleFavorite={(symbol) => toggleFavorite.mutate(symbol)}
+              sentimentMap={sentimentMap}
             />
           ))}
         </div>

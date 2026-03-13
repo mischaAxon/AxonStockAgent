@@ -238,3 +238,10 @@ export interface LatestSignalPerSymbol {
   fundamentalsScore: number | null;
   newsScore: number | null;
 }
+
+export interface SentimentChange {
+  symbol: string;
+  sentimentChange: number | null;
+  currentSentiment: number | null;
+  dataPoints: number;
+}

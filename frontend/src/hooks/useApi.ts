@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient, useQueries } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { api } from '../services/api';
-import type { ApiResponse, PaginatedResponse, DashboardData, Signal, WatchlistItem, PortfolioItem, NewsArticle, SectorSentiment, TrendingSymbol, CompanyFundamentals, InsiderTransaction, AlgoSettingsResponse, ExchangeInfo, MarketSymbol, Quote, LatestSignalPerSymbol, MarketIndex } from '../types';
+import type { ApiResponse, PaginatedResponse, DashboardData, Signal, WatchlistItem, PortfolioItem, NewsArticle, SectorSentiment, TrendingSymbol, CompanyFundamentals, InsiderTransaction, AlgoSettingsResponse, ExchangeInfo, MarketSymbol, Quote, LatestSignalPerSymbol, MarketIndex, SentimentChange } from '../types';
 
 // Dashboard
 export function useDashboard() {
@@ -328,5 +328,15 @@ export function useToggleFavorite() {
     mutationFn: (symbol: string) =>
       api.post<{ data: { symbol: string; isFavorite: boolean } }>(`/v1/favorites/${symbol}`, {}),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['favorites'] }),
+  });
+}
+
+// Sentiment Changes
+export function useSentimentChanges(days = 7) {
+  return useQuery({
+    queryKey: ['signals', 'sentiment-changes', days],
+    queryFn: () => api.get<ApiResponse<SentimentChange[]>>(`/v1/signals/sentiment-changes?days=${days}`),
+    staleTime: 60_000,
+    refetchInterval: 60_000,
   });
 }

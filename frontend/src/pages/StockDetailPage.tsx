@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, RefreshCw, ExternalLink } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { useFundamentals, useInsiderTransactions, useWatchlist, useSignals, useNewsBySymbol, useBatchQuotes } from '../hooks/useApi';
+import { useFundamentals, useInsiderTransactions, useWatchlist, useSignals, useNewsBySymbol, useBatchQuotes, useSentimentChanges } from '../hooks/useApi';
 import type { CompanyFundamentals, InsiderTransaction, Signal, NewsArticle, WatchlistItem } from '../types';
 import { relativeTime } from '../utils/formatTime';
 import { VerdictBadge, ScoreBar, InfoTooltip } from '../components/shared';
@@ -96,8 +96,8 @@ function Skeleton() {
   return (
     <div className="animate-pulse space-y-4">
       <div className="h-8 bg-gray-800 rounded w-48" />
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        {Array.from({ length: 5 }).map((_, i) => (
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+        {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="h-20 bg-gray-800 rounded-xl" />
         ))}
       </div>
@@ -374,6 +374,8 @@ export default function StockDetailPage() {
   const { data: newsData }        = useNewsBySymbol(upperSymbol);
   const { data: quoteData }       = useBatchQuotes([upperSymbol]);
   const quote = quoteData?.data?.[upperSymbol];
+  const { data: sentimentData }   = useSentimentChanges(7);
+  const sentimentChange = sentimentData?.data?.find(s => s.symbol === upperSymbol);
 
   const watchlistItem = watchlistData?.data?.find(w => w.symbol === upperSymbol);
   const fund: CompanyFundamentals | undefined = fundData?.data;
@@ -535,7 +537,7 @@ export default function StockDetailPage() {
       {activeTab === 'Signalen' && (
         <div className="space-y-6">
           {/* Quick Stats Banner */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
               <p className="text-xs text-gray-500 mb-1.5 flex items-center">Laatste Signaal<InfoTooltip text={TOOLTIPS.verdict} /></p>
               {signalsLoading ? (
@@ -604,6 +606,32 @@ export default function StockDetailPage() {
                 />
               ) : (
                 <p className="text-gray-600 text-sm">Geen data</p>
+              )}
+            </div>
+
+            {/* Sentiment Δ */}
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <p className="text-xs text-gray-500 mb-1.5 flex items-center">
+                Sentiment Δ
+                <InfoTooltip text="Verandering in sentimentscore over de afgelopen 7 dagen. Verschil tussen recent en eerder gemiddeld sentiment." />
+              </p>
+              {sentimentChange ? (
+                <div>
+                  <p className={`text-xl font-bold font-mono ${
+                    sentimentChange.sentimentChange! > 0 ? 'text-green-400'
+                    : sentimentChange.sentimentChange! < 0 ? 'text-red-400'
+                    : 'text-gray-400'
+                  }`}>
+                    {sentimentChange.sentimentChange! > 0 ? '+' : ''}{sentimentChange.sentimentChange}%
+                  </p>
+                  {sentimentChange.currentSentiment != null && (
+                    <p className="text-[10px] text-gray-500 mt-0.5">
+                      Huidig: {sentimentChange.currentSentiment}%
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-gray-600 text-xl font-bold">—</p>
               )}
             </div>
           </div>

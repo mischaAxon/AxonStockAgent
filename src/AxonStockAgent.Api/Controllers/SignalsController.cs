@@ -122,6 +122,51 @@ public class SignalsController : ControllerBase
         })});
     }
 
+    [HttpGet("sentiment-changes")]
+    public async Task<IActionResult> GetSentimentChanges([FromQuery] int days = 7)
+    {
+        var since = DateTime.UtcNow.AddDays(-Math.Min(days, 90));
+        var midpoint = DateTime.UtcNow.AddDays(-Math.Min(days, 90) / 2.0);
+
+        var signals = await _db.Signals
+            .Where(s => s.CreatedAt >= since && s.SentimentScore.HasValue)
+            .Select(s => new { s.Symbol, s.SentimentScore, s.CreatedAt })
+            .AsNoTracking()
+            .ToListAsync();
+
+        var result = signals
+            .GroupBy(s => s.Symbol)
+            .Select(g =>
+            {
+                var early = g.Where(s => s.CreatedAt < midpoint)
+                             .Select(s => s.SentimentScore!.Value).ToList();
+                var late  = g.Where(s => s.CreatedAt >= midpoint)
+                             .Select(s => s.SentimentScore!.Value).ToList();
+
+                var earlyAvg = early.Count > 0 ? early.Average() : (double?)null;
+                var lateAvg  = late.Count > 0  ? late.Average()  : (double?)null;
+
+                double? change = (earlyAvg.HasValue && lateAvg.HasValue)
+                    ? Math.Round((lateAvg.Value - earlyAvg.Value) * 100, 1)
+                    : null;
+
+                return new
+                {
+                    symbol           = g.Key,
+                    sentimentChange  = change,
+                    currentSentiment = lateAvg.HasValue
+                        ? Math.Round(lateAvg.Value * 100, 1)
+                        : (double?)null,
+                    dataPoints       = g.Count()
+                };
+            })
+            .Where(x => x.sentimentChange.HasValue)
+            .OrderByDescending(x => Math.Abs(x.sentimentChange!.Value))
+            .ToList();
+
+        return Ok(new { data = result });
+    }
+
     [HttpGet("accuracy")]
     public async Task<IActionResult> GetAccuracy([FromQuery] int days = 30)
     {
