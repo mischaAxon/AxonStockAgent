@@ -255,4 +255,61 @@ public class DiagnosticsController : ControllerBase
             results
         });
     }
+
+    /// <summary>
+    /// Test quotes voor alle actieve symbolen en retourneer welke falen.
+    /// Gebruikt de QuoteCacheService zodat gecachde resultaten niet opnieuw worden opgehaald.
+    /// Gebruik ?indexOnly=true (default) om alleen index-leden te testen.
+    /// </summary>
+    [HttpGet("quote-failures")]
+    public async Task<IActionResult> GetQuoteFailures([FromQuery] bool indexOnly = true)
+    {
+        List<string> symbols;
+
+        if (indexOnly)
+        {
+            symbols = await _db.IndexMemberships
+                .Select(m => m.Symbol)
+                .Distinct()
+                .OrderBy(s => s)
+                .ToListAsync();
+        }
+        else
+        {
+            symbols = await _db.MarketSymbols
+                .Where(m => m.IsActive)
+                .Select(m => m.Symbol)
+                .OrderBy(s => s)
+                .ToListAsync();
+        }
+
+        var successes = new List<object>();
+        var failures  = new List<object>();
+
+        foreach (var symbol in symbols)
+        {
+            try
+            {
+                var quote = await _quoteCache.GetQuote(symbol);
+                if (quote != null && quote.CurrentPrice > 0)
+                    successes.Add(new { symbol, price = quote.CurrentPrice });
+                else
+                    failures.Add(new { symbol, reason = "null or zero price" });
+            }
+            catch (Exception ex)
+            {
+                failures.Add(new { symbol, reason = ex.Message });
+            }
+        }
+
+        return Ok(new
+        {
+            tested        = symbols.Count,
+            successCount  = successes.Count,
+            failureCount  = failures.Count,
+            indexOnly,
+            failures,
+            sampleSuccesses = successes.Take(10)
+        });
+    }
 }

@@ -605,6 +605,92 @@ public class AdminController : ControllerBase
             }
         });
     }
+
+    // ── Symbol Cleanup ─────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Toont alle "orphan" symbolen: actieve MarketSymbols die NIET in een index zitten.
+    /// </summary>
+    [HttpGet("symbols/orphans")]
+    public async Task<IActionResult> GetOrphanSymbols()
+    {
+        var indexedSymbols = await _db.IndexMemberships
+            .Select(m => m.Symbol)
+            .Distinct()
+            .ToListAsync();
+
+        var indexedSet = new HashSet<string>(indexedSymbols);
+
+        var allActive = await _db.MarketSymbols
+            .Where(m => m.IsActive)
+            .OrderBy(m => m.Symbol)
+            .ToListAsync();
+
+        var orphanList = allActive
+            .Where(m => !indexedSet.Contains(m.Symbol))
+            .Select(m => new { m.Symbol, m.Name, m.Exchange, m.Country, m.Sector, m.ImportedAt })
+            .ToList();
+
+        return Ok(new
+        {
+            data = new
+            {
+                totalActive   = allActive.Count,
+                totalIndexed  = indexedSymbols.Count,
+                orphanCount   = orphanList.Count,
+                orphans       = orphanList
+            }
+        });
+    }
+
+    /// <summary>
+    /// Deactiveer alle orphan symbolen (symbolen die niet in een index zitten).
+    /// Ze worden niet verwijderd maar op IsActive = false gezet.
+    /// Gebruik ?keep=SYM1.AS,SYM2.AS om specifieke symbolen te bewaren.
+    /// </summary>
+    [HttpPost("symbols/cleanup-orphans")]
+    public async Task<IActionResult> CleanupOrphanSymbols([FromQuery] string? keep = null)
+    {
+        var indexedSymbols = await _db.IndexMemberships
+            .Select(m => m.Symbol)
+            .Distinct()
+            .ToListAsync();
+
+        var indexedSet = new HashSet<string>(indexedSymbols);
+
+        var keepSet = new HashSet<string>(
+            (keep ?? "")
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(s => s.ToUpper()),
+            StringComparer.OrdinalIgnoreCase);
+
+        var allActive = await _db.MarketSymbols
+            .Where(m => m.IsActive)
+            .ToListAsync();
+
+        var toDeactivate = allActive
+            .Where(m => !indexedSet.Contains(m.Symbol) && !keepSet.Contains(m.Symbol))
+            .ToList();
+
+        foreach (var sym in toDeactivate)
+        {
+            sym.IsActive  = false;
+            sym.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await _db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            data = new
+            {
+                deactivated = toDeactivate.Count,
+                kept        = keepSet.Count,
+                symbols     = toDeactivate.Select(s => s.Symbol).ToList()
+            },
+            message = $"{toDeactivate.Count} orphan symbolen gedeactiveerd"
+        });
+    }
 }
 
 public record UpdateUserRequest(string? Role = null, bool? IsActive = null);
