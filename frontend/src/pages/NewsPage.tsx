@@ -37,10 +37,13 @@ function SentimentDot({ score }: { score: number }) {
 export default function NewsPage() {
   const { data: sentiment = [] } = useSectorSentiment();
   const { data: trending = [] } = useTrending();
-  const { data: articles = [] } = useLatestNews(50);
+  const { data: articles = [] } = useLatestNews(100);
   const [sectorFilter, setSectorFilter] = useState<string>('');
 
-  const sectors = Array.from(new Set(articles.map(a => a.sector).filter(Boolean) as string[]));
+  // Sectoren uit twee bronnen: artikelen + sector sentiment (completer)
+  const articleSectors = articles.map(a => a.sector).filter(Boolean) as string[];
+  const sentimentSectors = sentiment.map(s => s.sector);
+  const sectors = Array.from(new Set([...articleSectors, ...sentimentSectors])).sort();
   const filtered = sectorFilter ? articles.filter(a => a.sector === sectorFilter) : articles;
 
   return (

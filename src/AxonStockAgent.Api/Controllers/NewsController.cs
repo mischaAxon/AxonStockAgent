@@ -18,8 +18,8 @@ public class NewsController : ControllerBase
     }
 
     [HttpGet("latest")]
-    public async Task<IActionResult> GetLatest([FromQuery] int limit = 20)
-        => Ok(await _newsService.GetLatestNews(Math.Clamp(limit, 1, 100)));
+    public async Task<IActionResult> GetLatest([FromQuery] int limit = 50)
+        => Ok(await _newsService.GetLatestNews(Math.Clamp(limit, 1, 500)));
 
     [HttpGet("symbol/{symbol}")]
     public async Task<IActionResult> GetBySymbol(string symbol, [FromQuery] int limit = 10)

@@ -232,6 +232,38 @@ public class NewsService
         return latest.Select(s => new SectorSentimentDto(s.Sector, s.AvgSentiment, s.ArticleCount, s.CalculatedAt)).ToList();
     }
 
+    /// <summary>
+    /// Update sector-veld voor alle artikelen die een symbool hebben maar geen sector.
+    /// </summary>
+    public async Task<int> BackfillSectors()
+    {
+        var articles = await _db.NewsArticles
+            .Where(n => n.Symbol != null && n.Sector == null)
+            .ToListAsync();
+
+        if (articles.Count == 0) return 0;
+
+        var symbolSectors = await _db.MarketSymbols
+            .Where(m => m.Sector != null)
+            .ToDictionaryAsync(m => m.Symbol, m => m.Sector!);
+
+        int updated = 0;
+        foreach (var article in articles)
+        {
+            if (article.Symbol != null && symbolSectors.TryGetValue(article.Symbol, out var sector))
+            {
+                article.Sector = sector;
+                updated++;
+            }
+        }
+
+        if (updated > 0)
+            await _db.SaveChangesAsync();
+
+        _logger.LogInformation("Backfilled sector for {Updated}/{Total} articles", updated, articles.Count);
+        return updated;
+    }
+
     public async Task<List<TrendingSymbolDto>> GetTrendingSymbols(int limit = 10)
     {
         var since = DateTime.UtcNow.AddHours(-24);

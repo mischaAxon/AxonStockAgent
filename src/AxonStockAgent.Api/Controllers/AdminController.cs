@@ -716,6 +716,14 @@ public class AdminController : ControllerBase
         });
     }
 
+    /// <summary>Update sector-veld voor oude artikelen die een symbool maar geen sector hebben.</summary>
+    [HttpPost("news/backfill-sectors")]
+    public async Task<IActionResult> BackfillNewsSectors([FromServices] NewsService newsService)
+    {
+        var updated = await newsService.BackfillSectors();
+        return Ok(new { data = new { updated }, message = $"{updated} artikelen bijgewerkt met sector" });
+    }
+
     /// <summary>
     /// Toont de status van de nieuws database.
     /// </summary>
