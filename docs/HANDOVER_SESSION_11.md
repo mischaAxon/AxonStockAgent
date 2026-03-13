@@ -9,9 +9,9 @@
 
 ## Wat is er gedaan in sessie 11
 
-Focus: **Data pipeline volledig werkend krijgen — diagnostiek, index-correctie, worker scan, fundamentals, cleanup, nieuws**
+Focus: **Volledige data pipeline werkend krijgen — van 5% naar 100% data coverage**
 
-Zes prompts geschreven en uitgevoerd (27 t/m 32). Het Markets scherm ging van ~5% data coverage naar 100%. De nieuwspipeline ging van 7 naar 69 symbolen.
+Acht prompts geschreven en uitgevoerd (27 t/m 34). Het Markets scherm ging van ~5% data coverage naar 100%. De nieuwspipeline ging van 7 naar 69 symbolen met 9 sectoren.
 
 ### 1. Data Diagnostics + NL Index Herindeling (Prompt 27) ✅
 
@@ -49,7 +49,7 @@ Zes prompts geschreven en uitgevoerd (27 t/m 32). Het Markets scherm ging van ~5
 **Oplossing:**
 - `GET /admin/symbols/orphans` + `POST /admin/symbols/cleanup-orphans`
 - `GET /diagnostics/quote-failures`
-- 24 orphans + 3 niet-ondersteunde symbolen gedeactiveerd
+- 24 orphans + 3 niet-ondersteunde symbolen (CTP, FAGR, WDP) gedeactiveerd
 
 ### 5. Fix Laatste Missende Quotes (Prompt 31) ✅
 
@@ -64,14 +64,30 @@ Zes prompts geschreven en uitgevoerd (27 t/m 32). Het Markets scherm ging van ~5
 
 ### 6. Nieuws Pipeline Fix (Prompt 32) ✅
 
-**Probleem:** NewsService las Watchlist (bijna leeg), werd niet periodiek aangeroepen. Sectorfilter toonde alleen "Technology".
+**Probleem:** NewsService las Watchlist (bijna leeg), werd niet periodiek aangeroepen.
 
 **Oplossing:**
 - NewsService leest nu MarketSymbols (69 symbolen) met 500ms rate limit
-- Geen dubbele sentiment calls meer (EODHD geeft sentiment mee in news response)
+- Geen dubbele sentiment calls meer
 - Worker roept `FetchLatestNews()` + `CalculateSectorSentiment()` aan na elke scan cycle
 - `POST /admin/news/fetch` + `GET /admin/news/status` endpoints
-- Van 7 naar 69 symbolen met nieuws, van 1 naar 9 sectoren
+
+### 7. Nieuws Sector Filter Fix (Prompt 33) ✅
+
+**Probleem:** Sector filter toonde alleen "Technology".
+
+**Oplossing:**
+- Frontend combineert sectoren uit artikelen + sector_sentiment data
+- BackfillSectors() voor oude artikelen zonder sector
+- News limit verhoogd van 100 naar 500
+
+### 8. Nieuws Status Pill Fix (Prompt 34) ✅
+
+**Probleem:** "Nieuws 0" pill op Markets pagina.
+
+**Oplossing:**
+- Pill gebruikt nu `useSectorSentiment()` articleCount ipv sentimentMap.size
+- Toont werkelijk artikelaantal (bv. "Nieuws 847")
 
 ---
 
@@ -81,13 +97,14 @@ Zes prompts geschreven en uitgevoerd (27 t/m 32). Het Markets scherm ging van ~5
 |--------|-------------|-------------|
 | Actieve symbolen | 98 (veel orphans) | 69 (schoon) |
 | Symbolen met koers | ~5 (5%) | 69 (100%) |
-| Index-kolommen | 3 (incorrect) | 3 (AEX/AMS Next 20/AMX Midcap) |
+| Index-kolommen | 3 (incorrect) | 3 (AEX / AMS Next 20 / AMX Midcap) |
 | "Overig" kolom | 24 symbolen zonder data | Verdwenen |
 | Signalen | 0-1 | Worden gegenereerd per scan |
 | Fundamentals | 0 | Bulk refresh beschikbaar |
 | Pillar scores | Nooit gevuld | Gevuld bij elke scan |
 | Nieuws symbolen | 7 | 69 |
 | Nieuws sectoren | 1 (Technology) | 9 sectoren |
+| Nieuws status pill | "Nieuws 0" | "Nieuws 847" |
 | Scan trigger | Niet mogelijk | Via admin endpoint |
 
 ---
@@ -98,7 +115,7 @@ Zes prompts geschreven en uitgevoerd (27 t/m 32). Het Markets scherm ging van ~5
 |---------|-------|--------|
 | `src/.../Controllers/DiagnosticsController.cs` | **Herschreven** — 6 endpoints | 27, 31 |
 | `src/.../Services/DutchIndexData.cs` | **Nieuw** | 27 |
-| `src/.../Controllers/AdminController.cs` | **Uitgebreid** — 8 nieuwe endpoints | 27, 28, 29, 30, 32 |
+| `src/.../Controllers/AdminController.cs` | **Uitgebreid** — 10 nieuwe endpoints | 27, 28, 29, 30, 32, 33 |
 | `src/.../Providers/EodhdProvider.cs` | **Gewijzigd** — EOD fallback, betere logging | 27 |
 | `src/.../Services/QuoteCacheService.cs` | **Gewijzigd** — semaphore, EOD cache | 27, 31 |
 | `src/.../Entities/ScanTriggerEntity.cs` | **Nieuw** | 28 |
@@ -107,7 +124,10 @@ Zes prompts geschreven en uitgevoerd (27 t/m 32). Het Markets scherm ging van ~5
 | `src/.../Worker/Program.cs` | **Gewijzigd** — NewsService DI | 32 |
 | `src/.../Services/AlgoSettingsService.cs` | **Gewijzigd** — GetStringAsync, scan_source | 28 |
 | `src/.../Services/FundamentalsService.cs` | **Gewijzigd** — RefreshAllMarketSymbolsFundamentals | 29 |
-| `src/.../Services/NewsService.cs` | **Gewijzigd** — MarketSymbols, rate limiting, geen dubbele sentiment | 32 |
+| `src/.../Services/NewsService.cs` | **Gewijzigd** — MarketSymbols, rate limiting, BackfillSectors | 32, 33 |
+| `src/.../Controllers/NewsController.cs` | **Gewijzigd** — limit verhoogd | 33 |
+| `frontend/src/pages/MarketsPage.tsx` | **Gewijzigd** — Nieuws pill fix | 34 |
+| `frontend/src/pages/NewsPage.tsx` | **Gewijzigd** — sector filter uit twee bronnen | 33 |
 | DB migraties | scan_triggers tabel, scan_source setting | 28 |
 
 ---
@@ -130,6 +150,49 @@ Zes prompts geschreven en uitgevoerd (27 t/m 32). Het Markets scherm ging van ~5
 | `/admin/symbols/cleanup-orphans` | POST | Deactiveer orphans |
 | `/admin/news/fetch` | POST | Trigger nieuws ophalen |
 | `/admin/news/status` | GET | Nieuws database status |
+| `/admin/news/backfill-sectors` | POST | Backfill sectoren op oude artikelen |
+
+---
+
+## Architectuur na sessie 11
+
+### Worker data flow
+
+```
+ScreenerWorker (elke minuut poll / EOD 22:30 UTC)
+  ├─ CheckAndRunTriggerAsync()    → poll scan_triggers tabel
+  ├─ RunScanCycleAsync()
+  │   ├─ Bron: MarketSymbols (69 symbolen)
+  │   ├─ Per symbool:
+  │   │   ├─ GetCandles()          → EODHD EOD data
+  │   │   ├─ IndicatorEngine      → technische analyse
+  │   │   ├─ GetSentimentScore()   → EODHD nieuws sentiment
+  │   │   ├─ ClaudeAnalysis        → AI beoordeling (optioneel)
+  │   │   ├─ FundamentalsScorer    → fundamentele score
+  │   │   └─ Gewogen eindscore     → BUY/SELL/SQUEEZE/HOLD
+  │   ├─ UpsertSignalAsync()       → met FundamentalsScore + NewsScore
+  │   └─ FetchLatestNews()         → nieuws ophalen + sector sentiment
+  ├─ TelegramNotification          → bij nieuwe BUY/SELL/SQUEEZE
+  └─ Zondagnacht: fundamentals bulk refresh
+```
+
+### Frontend data flow: Markets scherm
+
+```
+MarketsPage
+  ├─ useIndicesWithSymbols()       → GET /exchanges/indices-with-symbols
+  ├─ useAllSymbols()               → GET /exchanges/all-symbols
+  ├─ useBatchQuotes(symbols)       → GET /quotes/batch (30s poll, semaphore max 5)
+  ├─ useLatestSignalsPerSymbol     → GET /signals/latest-per-symbol
+  ├─ useFavorites()                → GET /favorites
+  ├─ useSentimentChanges(7)        → GET /signals/sentiment-changes
+  ├─ useSectorSentiment()          → GET /news/sector-sentiment (voor Nieuws pill)
+  └─ Per index: ExchangeColumn → Tile
+       ├─ Ster-icoon (favoriet toggle)
+       ├─ Verdict dot + score
+       ├─ PillarDots (4 gekleurde stipjes)
+       └─ S:±% (sentiment change)
+```
 
 ---
 
@@ -138,7 +201,7 @@ Zes prompts geschreven en uitgevoerd (27 t/m 32). Het Markets scherm ging van ~5
 ### Prioriteit 1: Validatie & Verificatie
 1. Scan triggeren en verifiëren dat signalen correct op Markets verschijnen (verdict dots, pillar dots, scores)
 2. Fundamentals refresh triggeren en StockDetailPage Fundamentals tab valideren
-3. Nieuws-pagina valideren (sector filter, trending, sentiment heatmap)
+3. Nieuws-pagina valideren (alle 9 sectoren, trending, sentiment heatmap)
 
 ### Prioriteit 2: UX Polish
 4. Sorteer-opties op Markets (change%, score, sentiment, marktcap)
