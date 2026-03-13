@@ -34,9 +34,11 @@ public class ProviderManager
     {
         if (_marketData != null) return;
 
-        _marketData   = new();
-        _news         = new();
-        _fundamentals = new();
+        // Bouw lokale lijsten op vóór toewijzing aan velden.
+        // Zo zien concurrent tasks pas een non-null _marketData als de lijst volledig gevuld is.
+        var md = new List<IMarketDataProvider>();
+        var ns = new List<INewsProvider>();
+        var fp = new List<IFundamentalsProvider>();
 
         var configs = await _db.DataProviders
             .Where(p => p.IsEnabled)
@@ -48,10 +50,14 @@ public class ProviderManager
             var provider = CreateProvider(config);
             if (provider is null) continue;
 
-            if (provider is IMarketDataProvider  md) _marketData.Add(md);
-            if (provider is INewsProvider         np) _news.Add(np);
-            if (provider is IFundamentalsProvider fp) _fundamentals.Add(fp);
+            if (provider is IMarketDataProvider  m) md.Add(m);
+            if (provider is INewsProvider         n) ns.Add(n);
+            if (provider is IFundamentalsProvider f) fp.Add(f);
         }
+
+        _news         = ns;
+        _fundamentals = fp;
+        _marketData   = md; // stel als laatste in — dit is het signaal dat laden klaar is
 
         _logger.LogInformation(
             "ProviderManager: {MD} market-data, {N} news, {F} fundamentals providers geladen",
