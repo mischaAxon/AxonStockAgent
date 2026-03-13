@@ -183,7 +183,13 @@ public class AdminController : ControllerBase
 
         var provider = await _providers.GetProviderByName(name);
         if (provider == null)
-            return StatusCode(501, new { error = "Geen implementatie beschikbaar voor deze provider" });
+        {
+            config.HealthStatus    = "unknown";
+            config.LastHealthCheck = DateTime.UtcNow;
+            config.UpdatedAt       = DateTime.UtcNow;
+            await _db.SaveChangesAsync();
+            return Ok(new { data = new { name, health = "unknown", detail = "Provider heeft nog geen implementatie in deze versie", checkedAt = config.LastHealthCheck } });
+        }
 
         string health;
         string? detail = null;
