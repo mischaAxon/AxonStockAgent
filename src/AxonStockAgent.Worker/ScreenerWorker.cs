@@ -370,6 +370,20 @@ public class ScreenerWorker : BackgroundService
             "Scan cycle voltooid: {Processed}/{Total} symbolen verwerkt, {Signals} signalen gegenereerd",
             processed, symbols.Count, signalsGenerated);
 
+        // ── 5. Nieuws ophalen na scan ──
+        try
+        {
+            var newsService = scope.ServiceProvider.GetRequiredService<NewsService>();
+            _logger.LogInformation("Nieuws ophalen gestart...");
+            await newsService.FetchLatestNews();
+            await newsService.CalculateSectorSentiment();
+            _logger.LogInformation("Nieuws ophalen en sector sentiment berekening voltooid");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Nieuws ophalen mislukt (scan resultaten zijn wel opgeslagen)");
+        }
+
         return (processed, signalsGenerated);
     }
 

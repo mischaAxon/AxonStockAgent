@@ -54,15 +54,28 @@ public class NewsService
             return;
         }
 
-        var symbols = await _db.Watchlist
-            .Select(w => new { w.Symbol, w.Sector })
+        // Primair: MarketSymbols (alle index-leden met sector info)
+        var symbols = await _db.MarketSymbols
+            .Where(m => m.IsActive)
+            .Select(m => new { m.Symbol, m.Sector })
             .ToListAsync();
+
+        // Fallback: Watchlist als MarketSymbols leeg is
+        if (symbols.Count == 0)
+        {
+            symbols = await _db.Watchlist
+                .Where(w => w.IsActive)
+                .Select(w => new { w.Symbol, w.Sector })
+                .ToListAsync();
+        }
 
         if (symbols.Count == 0)
         {
-            _logger.LogInformation("No watchlist symbols to fetch news for");
+            _logger.LogInformation("No symbols found to fetch news for (MarketSymbols and Watchlist both empty)");
             return;
         }
+
+        _logger.LogInformation("Fetching news for {Count} symbols", symbols.Count);
 
         var since = DateTime.UtcNow.AddHours(-24);
         var existingHeadlines = (await _db.NewsArticles
@@ -73,23 +86,17 @@ public class NewsService
         int saved = 0;
         foreach (var provider in newsProviders)
         {
-            // Per-symbol company news
+            // Per-symbol company news — met rate limiting (max 2 per seconde)
+            int fetchedForProvider = 0;
             foreach (var item in symbols)
             {
                 try
                 {
-                    var articles = await provider.GetNews(item.Symbol);
+                    var articles = await provider.GetNews(item.Symbol, limit: 5);
                     foreach (var article in articles)
                     {
                         if (existingHeadlines.Contains(article.Headline))
                             continue;
-
-                        double sentiment = article.SentimentScore;
-                        if (sentiment == 0)
-                        {
-                            try { sentiment = await provider.GetSentimentScore(item.Symbol); }
-                            catch { /* ignore */ }
-                        }
 
                         var entity = new NewsArticleEntity
                         {
@@ -99,7 +106,7 @@ public class NewsService
                             Url = article.Url,
                             Symbol = item.Symbol,
                             Sector = item.Sector,
-                            SentimentScore = sentiment,
+                            SentimentScore = article.SentimentScore,
                             PublishedAt = article.PublishedAt,
                             FetchedAt = DateTime.UtcNow
                         };
@@ -108,12 +115,19 @@ public class NewsService
                         existingHeadlines.Add(article.Headline);
                         saved++;
                     }
+
+                    fetchedForProvider++;
                 }
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "Failed to fetch news for {Symbol} from {Provider}", item.Symbol, provider.Name);
                 }
+
+                // Rate limiting: 500ms pauze per symbool
+                await Task.Delay(500);
             }
+
+            _logger.LogInformation("Fetched news for {Count} symbols from {Provider}", fetchedForProvider, provider.Name);
 
             // Algemeen marktnieuws (geen sector-filter)
             try

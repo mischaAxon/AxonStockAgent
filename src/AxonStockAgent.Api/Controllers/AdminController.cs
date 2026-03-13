@@ -691,6 +691,78 @@ public class AdminController : ControllerBase
             message = $"{toDeactivate.Count} orphan symbolen gedeactiveerd"
         });
     }
+
+    // ── News Fetch ─────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Trigger handmatig het ophalen van nieuws voor alle actieve symbolen.
+    /// Duurt ~35 seconden voor 69 symbolen (500ms rate limit per symbool).
+    /// </summary>
+    [HttpPost("news/fetch")]
+    public async Task<IActionResult> FetchNews([FromServices] NewsService newsService)
+    {
+        var before = await _db.NewsArticles.CountAsync();
+
+        await newsService.FetchLatestNews();
+        await newsService.CalculateSectorSentiment();
+
+        var after = await _db.NewsArticles.CountAsync();
+        var newArticles = after - before;
+
+        return Ok(new
+        {
+            data = new { totalArticles = after, newArticles },
+            message = $"{newArticles} nieuwe artikelen opgehaald"
+        });
+    }
+
+    /// <summary>
+    /// Toont de status van de nieuws database.
+    /// </summary>
+    [HttpGet("news/status")]
+    public async Task<IActionResult> GetNewsStatus()
+    {
+        var total = await _db.NewsArticles.CountAsync();
+        var last24h = await _db.NewsArticles.CountAsync(n => n.PublishedAt >= DateTime.UtcNow.AddHours(-24));
+        var last7d  = await _db.NewsArticles.CountAsync(n => n.PublishedAt >= DateTime.UtcNow.AddDays(-7));
+
+        var symbolsWithNews = await _db.NewsArticles
+            .Where(n => n.Symbol != null && n.PublishedAt >= DateTime.UtcNow.AddDays(-7))
+            .Select(n => n.Symbol)
+            .Distinct()
+            .CountAsync();
+
+        var sectors = await _db.NewsArticles
+            .Where(n => n.Sector != null && n.PublishedAt >= DateTime.UtcNow.AddDays(-7))
+            .GroupBy(n => n.Sector!)
+            .Select(g => new { sector = g.Key, count = g.Count() })
+            .OrderByDescending(x => x.count)
+            .ToListAsync();
+
+        var oldestArticle = await _db.NewsArticles
+            .OrderBy(n => n.PublishedAt)
+            .Select(n => (DateTime?)n.PublishedAt)
+            .FirstOrDefaultAsync();
+
+        var newestArticle = await _db.NewsArticles
+            .OrderByDescending(n => n.PublishedAt)
+            .Select(n => (DateTime?)n.PublishedAt)
+            .FirstOrDefaultAsync();
+
+        return Ok(new
+        {
+            data = new
+            {
+                total,
+                last24h,
+                last7d,
+                symbolsWithNews,
+                sectorBreakdown = sectors,
+                oldestArticle,
+                newestArticle
+            }
+        });
+    }
 }
 
 public record UpdateUserRequest(string? Role = null, bool? IsActive = null);
