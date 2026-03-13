@@ -49,6 +49,9 @@ public class ScreenerWorker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            try
+            {
+
             using var modeScope = _scopeFactory.CreateScope();
             var algoSettings = modeScope.ServiceProvider.GetRequiredService<AlgoSettingsService>();
             var realtimeMode = await algoSettings.GetBoolAsync("scan", "realtime_mode", false);
@@ -105,6 +108,14 @@ public class ScreenerWorker : BackgroundService
 
                 // Check elke 5 minuten of het tijd is voor EOD scan
                 await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
+            }
+
+            } // end try
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Onverwachte fout in worker main loop, wacht 30s voor retry");
+                await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
             }
         }
     }
