@@ -20,7 +20,7 @@ public class NewsFetcherService : BackgroundService
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
-        _intervalSeconds = config.GetValue<int>("News:FetchIntervalSeconds", 60);
+        _intervalSeconds = config.GetValue<int>("News:FetchIntervalSeconds", 14400); // default 4 uur
         _enabled = config.GetValue<bool>("News:Enabled", true);
     }
 

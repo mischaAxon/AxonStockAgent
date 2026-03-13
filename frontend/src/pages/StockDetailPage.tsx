@@ -441,7 +441,18 @@ export default function StockDetailPage() {
       {quote && (
         <div className="flex items-center gap-4 bg-gray-900 border border-gray-800 rounded-xl px-5 py-3">
           <div>
-            <p className="text-xs text-gray-500 mb-0.5 flex items-center">Live Prijs<InfoTooltip text={TOOLTIPS.livePrice} size={11} /></p>
+            <p className="text-xs text-gray-500 mb-0.5 flex items-center gap-1">
+              Live Prijs<InfoTooltip text={TOOLTIPS.livePrice} size={11} />
+              {quote.timestamp && (() => {
+                const ageMin = Math.floor((Date.now() - new Date(quote.timestamp).getTime()) / 60000);
+                const isStale = ageMin > 15;
+                return (
+                  <span className={`text-[10px] ml-1 ${isStale ? 'text-orange-400' : 'text-gray-600'}`}>
+                    {ageMin < 1 ? 'zojuist' : `${ageMin}m geleden`}{isStale ? ' ⚠' : ''}
+                  </span>
+                );
+              })()}
+            </p>
             <p className="text-3xl font-bold font-mono text-white">
               {quote.currentPrice >= 1000
                 ? quote.currentPrice.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })

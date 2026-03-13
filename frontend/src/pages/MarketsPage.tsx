@@ -125,6 +125,12 @@ function SymbolSearchDropdown({
 
 // ── Tile ─────────────────────────────────────────────────────────────────────
 
+function quoteAgeMinutes(quote: Quote | undefined): number | null {
+  if (!quote?.timestamp) return null;
+  const ms = Date.now() - new Date(quote.timestamp).getTime();
+  return Math.floor(ms / 60000);
+}
+
 function Tile({
   symbol,
   quote,
@@ -142,6 +148,8 @@ function Tile({
   onToggleFavorite: () => void;
   sentimentChange: number | undefined;
 }) {
+  const ageMin = quoteAgeMinutes(quote);
+  const isStale = ageMin != null && ageMin > 15;
   let bg = 'bg-gray-900/80';
   let border = 'border-gray-800/60';
 
@@ -184,8 +192,9 @@ function Tile({
       <div className="font-mono text-[11px] font-bold text-white leading-none truncate">
         {shortSymbol(symbol.symbol)}
       </div>
-      <div className="font-mono text-[10px] text-gray-300 leading-tight mt-0.5">
+      <div className="font-mono text-[10px] text-gray-300 leading-tight mt-0.5 flex items-center gap-0.5">
         {quote ? formatPrice(quote.currentPrice) : '—'}
+        {isStale && <span className="w-1 h-1 rounded-full bg-orange-400 flex-shrink-0" title={`Prijs ${ageMin} min oud`} />}
       </div>
       <div className={`font-mono text-[10px] font-semibold leading-tight ${changeColor}`}>
         {quote ? `${changePct > 0 ? '+' : ''}${changePct.toFixed(1)}%` : ''}

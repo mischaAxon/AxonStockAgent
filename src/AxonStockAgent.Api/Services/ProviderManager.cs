@@ -88,6 +88,11 @@ public class ProviderManager
                 apiKey ?? "",
                 _sp.GetRequiredService<ILogger<FmpProvider>>()),
 
+            "twelvedata" => new TwelveDataProvider(
+                _sp.GetRequiredService<IHttpClientFactory>().CreateClient("twelvedata"),
+                apiKey ?? "",
+                _sp.GetRequiredService<ILogger<TwelveDataProvider>>()),
+
             _ => LogUnknown(config.Name)
         };
     }
@@ -157,18 +162,25 @@ public class ProviderManager
     }
 
     /// <summary>
-    /// Haal quotes op voor meerdere symbolen via één bulk API call (EODHD bulk endpoint).
-    /// Veel sneller dan losse GetQuote calls: 1 HTTP call per ~50 symbolen.
-    /// Retourneert alleen symbolen waarvoor data beschikbaar is.
+    /// Haal quotes op voor meerdere symbolen via één bulk API call.
+    /// Voorkeur: TwelveData (realtime, geen daglimiet op betaalde plannen).
+    /// Fallback: EODHD bulk endpoint. Laatste fallback: losse GetQuote calls.
     /// </summary>
     public async Task<Dictionary<string, Quote>> GetBulkQuotes(string[] symbols)
     {
         await EnsureLoaded();
+
+        // Voorkeur: TwelveData (realtime)
+        var twelve = _marketData!.OfType<TwelveDataProvider>().FirstOrDefault();
+        if (twelve != null)
+            return await twelve.GetBulkQuotes(symbols);
+
+        // Fallback: EODHD bulk endpoint
         var eodhd = _marketData!.OfType<EodhdProvider>().FirstOrDefault();
         if (eodhd != null)
             return await eodhd.GetBulkQuotes(symbols);
 
-        // Fallback: geen bulk provider — val terug op losse calls
+        // Laatste fallback: losse calls
         var result = new Dictionary<string, Quote>(StringComparer.OrdinalIgnoreCase);
         foreach (var sym in symbols)
         {
