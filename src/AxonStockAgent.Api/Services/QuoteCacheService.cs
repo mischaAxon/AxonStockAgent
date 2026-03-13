@@ -88,7 +88,7 @@ public class QuoteCacheService
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Fout bij ophalen quote voor {Symbol}", symbol);
+                    _logger.LogDebug("Quote fout voor {Symbol}: {Msg}", symbol, ex.Message);
                     return (symbol, (Quote?)null);
                 }
                 finally
