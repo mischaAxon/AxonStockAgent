@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, RefreshCw, ExternalLink } from 'lucide-react';
+import { ArrowLeft, RefreshCw } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { useFundamentals, useInsiderTransactions, useWatchlist, useSignals, useNewsBySymbol, useBatchQuotes, useSentimentChanges } from '../hooks/useApi';
-import type { CompanyFundamentals, InsiderTransaction, Signal, NewsArticle, WatchlistItem } from '../types';
+import { useFundamentals, useInsiderTransactions, useAllSymbols, useSignals, useNewsBySymbol, useBatchQuotes, useSentimentChanges } from '../hooks/useApi';
+import type { CompanyFundamentals, InsiderTransaction, Signal, NewsArticle, MarketSymbol } from '../types';
 import { relativeTime } from '../utils/formatTime';
 import { VerdictBadge, ScoreBar, InfoTooltip } from '../components/shared';
 import PillarScoreBar from '../components/PillarScoreBar';
@@ -296,7 +296,7 @@ function NewsTab({ news }: { news: NewsArticle[] }) {
   );
 }
 
-function ProfileTab({ watchlistItem, fund }: { watchlistItem: WatchlistItem | undefined; fund: CompanyFundamentals | undefined }) {
+function ProfileTab({ watchlistItem, fund }: { watchlistItem: MarketSymbol | undefined; fund: CompanyFundamentals | undefined }) {
   return (
     <div className="space-y-6">
       <section>
@@ -327,19 +327,6 @@ function ProfileTab({ watchlistItem, fund }: { watchlistItem: WatchlistItem | un
                 {fund?.marketCap != null ? '$' + fmtLarge(fund.marketCap) : watchlistItem?.marketCap != null ? '$' + fmtLarge(watchlistItem.marketCap) : '—'}
               </p>
             </div>
-            {watchlistItem?.webUrl && (
-              <div>
-                <p className="text-xs text-gray-500 mb-1">Website</p>
-                <a
-                  href={watchlistItem.webUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-axon-400 hover:text-axon-300 transition-colors"
-                >
-                  {new URL(watchlistItem.webUrl).hostname}
-                </a>
-              </div>
-            )}
           </div>
         </div>
       </section>
@@ -367,7 +354,7 @@ export default function StockDetailPage() {
   const upperSymbol = symbol.toUpperCase();
   const [activeTab, setActiveTab] = useState<Tab>('Signalen');
 
-  const { data: watchlistData }   = useWatchlist();
+  const { data: allSymbolsData }   = useAllSymbols();
   const { data: fundData, isLoading: fundLoading, error: fundError, refetch } = useFundamentals(upperSymbol);
   const { data: insidersData, isLoading: insidersLoading } = useInsiderTransactions(upperSymbol);
   const { data: signalsData,  isLoading: signalsLoading }  = useSignals(1, 10, upperSymbol);
@@ -377,7 +364,7 @@ export default function StockDetailPage() {
   const { data: sentimentData }   = useSentimentChanges(7);
   const sentimentChange = sentimentData?.data?.find(s => s.symbol === upperSymbol);
 
-  const watchlistItem = watchlistData?.data?.find(w => w.symbol === upperSymbol);
+  const watchlistItem = allSymbolsData?.data?.find(m => m.symbol === upperSymbol);
   const fund: CompanyFundamentals | undefined = fundData?.data;
   const insiders: InsiderTransaction[] = insidersData?.data ?? [];
   const signals: Signal[]   = signalsData?.data ?? [];
@@ -440,12 +427,6 @@ export default function StockDetailPage() {
         <div className="flex items-center gap-2 flex-shrink-0">
           {fund && (
             <p className="text-xs text-gray-500">Bijgewerkt: {relativeDate(fund.updatedAt)}</p>
-          )}
-          {watchlistItem?.webUrl && (
-            <a href={watchlistItem.webUrl} target="_blank" rel="noopener noreferrer"
-               className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors">
-              <ExternalLink size={14} />
-            </a>
           )}
           <button
             onClick={() => refetch()}
