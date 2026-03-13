@@ -21,7 +21,6 @@ public class FundamentalsController : ControllerBase
     public async Task<IActionResult> GetFundamentals(string symbol, [FromQuery] bool refresh = false)
     {
         var data = await _fundamentals.GetFundamentals(symbol.ToUpperInvariant(), refresh);
-        if (data == null) return NotFound(new { error = $"Geen fundamentals gevonden voor {symbol}" });
         return Ok(new { data });
     }
 

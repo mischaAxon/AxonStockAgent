@@ -127,11 +127,16 @@ public class ProviderManager
         return _news!.ToArray();
     }
 
-    /// <summary>Retourneert de eerste actieve fundamentals provider.</summary>
+    /// <summary>
+    /// Retourneert de beste fundamentals provider.
+    /// Voorkeur: EODHD (brede EU-dekking) → eerste beschikbare.
+    /// Finnhub gratis tier blokkeert fundamentals endpoints (403).
+    /// </summary>
     public async Task<IFundamentalsProvider?> GetFundamentalsProvider()
     {
         await EnsureLoaded();
-        return _fundamentals!.FirstOrDefault();
+        var eodhd = _fundamentals!.OfType<EodhdProvider>().FirstOrDefault();
+        return (IFundamentalsProvider?)eodhd ?? _fundamentals!.FirstOrDefault();
     }
 
     /// <summary>Retourneert een specifieke provider op naam als die actief is.</summary>
