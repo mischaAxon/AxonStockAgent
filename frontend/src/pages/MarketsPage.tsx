@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Star } from 'lucide-react';
-import { useAllSymbols, useBatchQuotes, useLatestSignalsPerSymbol, useIndicesWithSymbols, useFavorites, useToggleFavorite, useSentimentChanges } from '../hooks/useApi';
+import { useAllSymbols, useBatchQuotes, useLatestSignalsPerSymbol, useIndicesWithSymbols, useFavorites, useToggleFavorite, useSentimentChanges, useSectorSentiment } from '../hooks/useApi';
 import type { MarketSymbol, Quote, LatestSignalPerSymbol, MarketIndex } from '../types';
 import { PillarDots } from '../components/PillarScoreBar';
 
@@ -318,7 +318,7 @@ export default function MarketsPage() {
     return new Set<string>(favoritesData?.data ?? []);
   }, [favoritesData]);
 
-  const { data: sentimentData, isFetching: sentimentFetching } = useSentimentChanges(7);
+  const { data: sentimentData } = useSentimentChanges(7);
   const sentimentMap = useMemo(() => {
     const map = new Map<string, number>();
     for (const item of sentimentData?.data ?? []) {
@@ -330,6 +330,11 @@ export default function MarketsPage() {
   }, [sentimentData]);
 
   const navigate = useNavigate();
+
+  const { data: sectorSentiment = [], isFetching: newsFetching } = useSectorSentiment();
+  const newsArticleCount = useMemo(() =>
+    sectorSentiment.reduce((sum, s) => sum + (s.articleCount ?? 0), 0),
+  [sectorSentiment]);
 
   // Group: indexen als kolommen, plus "Overig" voor symbolen zonder index
   const columnGroups = useMemo(() => {
@@ -458,9 +463,9 @@ export default function MarketsPage() {
             />
             <StatusPill
               label="Nieuws"
-              count={sentimentMap.size}
+              count={newsArticleCount}
               loading={indicesLoading}
-              fetching={sentimentFetching}
+              fetching={newsFetching}
             />
           </div>
         </div>
