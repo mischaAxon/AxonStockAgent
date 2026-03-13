@@ -88,7 +88,7 @@ public class ProviderManager
                 apiKey ?? "",
                 _sp.GetRequiredService<ILogger<FmpProvider>>()),
 
-            "twelvedata" => new TwelveDataProvider(
+            "twelve_data" or "twelvedata" => new TwelveDataProvider(
                 _sp.GetRequiredService<IHttpClientFactory>().CreateClient("twelvedata"),
                 apiKey ?? "",
                 _sp.GetRequiredService<ILogger<TwelveDataProvider>>()),
