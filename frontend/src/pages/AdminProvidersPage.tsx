@@ -71,6 +71,13 @@ const PROVIDER_META: Record<string, ProviderMeta> = {
     cons: ['Vereist actief Saxo Bank handelsaccount', 'Complexe OAuth2-setup', 'Niet bruikbaar zonder Saxo-account'],
     supportsRealtime: true,
   },
+  claude: {
+    description: 'Anthropic Claude AI — wordt gebruikt voor signaalanalyse (reasoning + confidence), index-component lookup, en toekomstige AI-features zoals bedrijfssamenvatting.',
+    signupUrl: 'https://console.anthropic.com/settings/keys',
+    pros: ['Diepgaande reasoning over marktdata', 'Index-componenten opvragen via AI', 'Flexibel inzetbaar voor nieuwe features'],
+    cons: ['Pay-per-use (geen gratis tier voor API)', 'Geen real-time marktdata', 'Afhankelijk van Anthropic beschikbaarheid'],
+    supportsRealtime: false,
+  },
 };
 
 interface Provider {
@@ -95,12 +102,14 @@ const TYPE_LABELS: Record<string, string> = {
   news:          'Nieuws',
   fundamentals:  'Fundamentals',
   all:           'Alles',
+  ai:            'AI Analyse',
 };
 
 const TYPE_COLORS: Record<string, string> = {
   market_data:  'bg-blue-500/10 text-blue-400',
   news:         'bg-purple-500/10 text-purple-400',
   fundamentals: 'bg-amber-500/10 text-amber-400',
+  ai:           'bg-purple-500/10 text-purple-400',
   all:          'bg-axon-600/20 text-axon-400',
 };
 
