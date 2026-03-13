@@ -67,7 +67,9 @@ public class QuoteCacheService
 
         if (misses.Count > 0)
         {
-            _logger.LogDebug("QuoteCache: {Hits} hits, {Misses} misses", results.Count, misses.Count);
+            _logger.LogInformation("QuoteCache batch: {Hits} hits, {Misses} misses van {Total} gevraagd. Eerste misses: {FirstMisses}",
+                results.Count, misses.Count, results.Count + misses.Count,
+                string.Join(", ", misses.Take(5)));
 
             var tasks = misses.Select(async symbol =>
             {
@@ -95,6 +97,13 @@ public class QuoteCacheService
                     });
                     results[symbol] = quote;
                 }
+            }
+
+            var stillMissing = misses.Where(m => !results.ContainsKey(m)).ToList();
+            if (stillMissing.Count > 0)
+            {
+                _logger.LogWarning("QuoteCache: {Count} symbolen retourneerden null na API call. Voorbeelden: {Examples}",
+                    stillMissing.Count, string.Join(", ", stillMissing.Take(5)));
             }
         }
 

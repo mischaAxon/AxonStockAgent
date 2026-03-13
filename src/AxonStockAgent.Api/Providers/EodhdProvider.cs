@@ -191,14 +191,34 @@ public class EodhdProvider : IMarketDataProvider, INewsProvider, IFundamentalsPr
         var url = $"{BaseUrl}/real-time/{eodSymbol}?api_token={_apiKey}&fmt=json";
         try
         {
-            var json = await _http.GetStringAsync(url);
+            var response = await _http.GetAsync(url);
+            var json = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("EODHD GetQuote HTTP {StatusCode} voor {Symbol} ({EodSymbol}): {Body}",
+                    (int)response.StatusCode, symbol, eodSymbol, json.Length > 200 ? json[..200] : json);
+                return null;
+            }
+
             using var doc = JsonDocument.Parse(json);
             var r = doc.RootElement;
 
-            var c = r.TryGetProperty("close", out var cp) ? cp.GetDouble() : 0;
-            if (c == 0) return null;
+            if (r.TryGetProperty("error", out _) || r.TryGetProperty("message", out _))
+            {
+                _logger.LogWarning("EODHD GetQuote error response voor {Symbol} ({EodSymbol}): {Body}",
+                    symbol, eodSymbol, json.Length > 200 ? json[..200] : json);
+                return null;
+            }
 
-            var pc = r.TryGetProperty("previousClose", out var pcp) ? pcp.GetDouble() : 0;
+            var c = r.TryGetProperty("close", out var cp) && cp.ValueKind == JsonValueKind.Number ? cp.GetDouble() : 0;
+            if (c == 0)
+            {
+                _logger.LogDebug("EODHD GetQuote: close=0 voor {Symbol} ({EodSymbol})", symbol, eodSymbol);
+                return null;
+            }
+
+            var pc = r.TryGetProperty("previousClose", out var pcp) && pcp.ValueKind == JsonValueKind.Number ? pcp.GetDouble() : 0;
             var change = c - pc;
 
             return new Quote
@@ -208,16 +228,16 @@ public class EodhdProvider : IMarketDataProvider, INewsProvider, IFundamentalsPr
                 PreviousClose = pc,
                 Change        = change,
                 ChangePercent = pc > 0 ? change / pc * 100 : 0,
-                High          = r.TryGetProperty("high",   out var h) ? h.GetDouble() : 0,
-                Low           = r.TryGetProperty("low",    out var l) ? l.GetDouble() : 0,
-                Open          = r.TryGetProperty("open",   out var o) ? o.GetDouble() : 0,
-                Volume        = r.TryGetProperty("volume", out var v) ? v.GetInt64()  : 0,
+                High          = r.TryGetProperty("high",   out var h) && h.ValueKind == JsonValueKind.Number ? h.GetDouble() : 0,
+                Low           = r.TryGetProperty("low",    out var l) && l.ValueKind == JsonValueKind.Number ? l.GetDouble() : 0,
+                Open          = r.TryGetProperty("open",   out var o) && o.ValueKind == JsonValueKind.Number ? o.GetDouble() : 0,
+                Volume        = r.TryGetProperty("volume", out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt64()  : 0,
                 Timestamp     = DateTime.UtcNow
             };
         }
         catch (Exception ex)
         {
-            _logger.LogWarning("EODHD GetQuote mislukt voor {Symbol}: {Message}", symbol, ex.Message);
+            _logger.LogWarning(ex, "EODHD GetQuote mislukt voor {Symbol} ({EodSymbol})", symbol, eodSymbol);
             return null;
         }
     }
